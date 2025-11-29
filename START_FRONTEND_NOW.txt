@@ -1,0 +1,27 @@
+===========================================
+START FRONTEND SERVER - COPY THESE COMMANDS
+===========================================
+
+1. Open a NEW Command Prompt or PowerShell window
+   (Keep your backend terminal running!)
+
+2. Copy and paste these commands:
+
+cd C:\Users\darsh\Downloads\Case-competition_frontend\frontend
+npm run dev
+
+3. Wait for this message:
+   "VITE v5.x.x  ready in xxx ms"
+   "➜  Local:   http://localhost:3000/"
+
+4. Browser should open automatically
+   Or go to: http://localhost:3000
+
+===========================================
+IMPORTANT: You need TWO terminals running:
+- Terminal 1: Backend (port 5000) ✅
+- Terminal 2: Frontend (port 3000) ❌ START THIS NOW
+===========================================
+
+
+

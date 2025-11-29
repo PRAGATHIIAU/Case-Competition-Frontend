@@ -1,0 +1,43 @@
+# Copy this entire content to backend/.env file
+# Then update DB_PASSWORD with your PostgreSQL password
+
+# Database Configuration (YOUR LOCAL - NOT REMOTE)
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=case_competition_db
+DB_USER=postgres
+DB_PASSWORD=your_postgres_password
+DB_SSL=false
+
+# Server Configuration
+PORT=5000
+NODE_ENV=development
+
+# JWT Secret (YOUR OWN - keep it secret!)
+JWT_SECRET=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6a7b8c9d0e1f2g3h4i5j6k7l8m9n0o1p2q3r4s5t6u7v8w9x0y1z2
+
+# AWS Configuration for Events (DynamoDB and SES)
+AWS_REGION=us-east-1
+
+# API Gateway URLs (FROM YOUR FRIEND - these are shareable)
+API_GATEWAY_UPLOAD_URL=https://zyvoa629f8.execute-api.us-east-1.amazonaws.com/dev/upload
+API_GATEWAY_DYNAMODB_URL=https://uesvq6c260.execute-api.us-east-1.amazonaws.com/dev/events
+API_GATEWAY_STUDENT_PROFILES_URL=https://934mmrcmpj.execute-api.us-east-1.amazonaws.com/dev/profiles
+
+# Configuration for Lambda functions (used by Lambda, not directly by backend)
+S3_BUCKET_NAME=cmis-portal-resumes
+EVENTS_TABLE_NAME=Events
+
+# Email Configuration (FROM YOUR FRIEND - using Gmail)
+EMAIL_USER=aupragathii@gmail.com
+EMAIL_PASSWORD=wbka fydp pioz lmtj
+FROM_EMAIL=aupragathii@gmail.com
+ADMIN_EMAIL=aupragathii@gmail.com
+
+# Optional: Custom SMTP (defaults to Gmail if not specified)
+# SMTP_HOST=smtp.gmail.com
+# SMTP_PORT=587
+# SMTP_SECURE=false
+
+
+

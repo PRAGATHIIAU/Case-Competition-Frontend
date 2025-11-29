@@ -1,0 +1,100 @@
+========================================
+ALL CMD COMMANDS - COPY PASTE READY
+========================================
+
+STEP 1: CREATE DATABASE (PostgreSQL)
+========================================
+Open pgAdmin or psql and run:
+CREATE DATABASE case_competition_db;
+
+
+STEP 2: CREATE .ENV FILE
+========================================
+cd C:\Users\darsh\Downloads\Case-competition_frontend\backend
+copy FINAL_ENV_FILE.txt .env
+notepad .env
+(Update DB_PASSWORD with your PostgreSQL password, then save)
+
+
+STEP 3: INSTALL BACKEND DEPENDENCIES
+========================================
+cd C:\Users\darsh\Downloads\Case-competition_frontend\backend
+npm install
+
+
+STEP 4: INITIALIZE DATABASE TABLES
+========================================
+cd C:\Users\darsh\Downloads\Case-competition_frontend\backend
+npm run init-all
+
+
+STEP 5: RUN UNIFIED IDENTITY MIGRATION
+========================================
+cd C:\Users\darsh\Downloads\Case-competition_frontend\backend
+npm run migrate:unified-identity
+
+
+STEP 6: SEED DATABASE
+========================================
+cd C:\Users\darsh\Downloads\Case-competition_frontend\backend
+npm run seed
+
+
+STEP 7: START BACKEND (Terminal 1)
+========================================
+cd C:\Users\darsh\Downloads\Case-competition_frontend\backend
+npm run dev
+(Keep this terminal open!)
+
+
+STEP 8: INSTALL FRONTEND DEPENDENCIES (Terminal 2)
+========================================
+cd C:\Users\darsh\Downloads\Case-competition_frontend\frontend
+npm install
+
+
+STEP 9: START FRONTEND (Terminal 2)
+========================================
+cd C:\Users\darsh\Downloads\Case-competition_frontend\frontend
+npm run dev
+
+
+========================================
+TESTING
+========================================
+
+Open Browser:
+- Frontend: http://localhost:3000
+- Backend Health: http://localhost:5000/health
+- API Routes: http://localhost:5000/api
+
+Login Credentials:
+- Student: student@tamu.edu / 123456
+- Mentor: mentor@tamu.edu / 123456
+- Alumni: alumni@tamu.edu / 123456
+- Admin: admin@tamu.edu / 123456
+- Faculty: faculty@tamu.edu / 123456
+
+
+========================================
+QUICK START (All in One)
+========================================
+
+Terminal 1 - Backend:
+cd C:\Users\darsh\Downloads\Case-competition_frontend\backend
+copy FINAL_ENV_FILE.txt .env
+notepad .env
+(Update DB_PASSWORD, save and close)
+npm install
+npm run init-all
+npm run migrate:unified-identity
+npm run seed
+npm run dev
+
+Terminal 2 - Frontend:
+cd C:\Users\darsh\Downloads\Case-competition_frontend\frontend
+npm install
+npm run dev
+
+
+

@@ -1,0 +1,85 @@
+========================================
+COMPLETE SETUP COMMANDS FOR CMD
+========================================
+
+STEP 1: CREATE DATABASE (PostgreSQL)
+========================================
+Open pgAdmin or psql and run:
+CREATE DATABASE case_competition_db;
+
+
+STEP 2: SETUP BACKEND (Terminal 1)
+========================================
+cd C:\Users\darsh\Downloads\Case-competition_frontend\backend
+npm install
+npm run init-all
+npm run migrate:unified-identity
+npm run seed
+npm run dev
+
+
+STEP 3: SETUP FRONTEND (Terminal 2)
+========================================
+cd C:\Users\darsh\Downloads\Case-competition_frontend\frontend
+npm install
+npm run dev
+
+
+STEP 4: CREATE .ENV FILE
+========================================
+cd C:\Users\darsh\Downloads\Case-competition_frontend\backend
+copy ENV_TEMPLATE.txt .env
+(Then edit .env with your PostgreSQL password)
+
+
+TESTING COMMANDS
+========================================
+
+Test Backend Health:
+curl http://localhost:5000/health
+
+Test API Routes:
+curl http://localhost:5000/api
+
+Test Login:
+curl -X POST http://localhost:5000/api/auth/login -H "Content-Type: application/json" -d "{\"email\":\"student@tamu.edu\",\"password\":\"123456\"}"
+
+Test Mentor Recommendations:
+curl -X POST http://localhost:5000/api/mentors/recommend -H "Content-Type: application/json" -d "{\"skills\":[\"JavaScript\",\"React\",\"Node.js\"]}"
+
+
+LOGIN CREDENTIALS (After Seeding)
+========================================
+Student:  student@tamu.edu / 123456
+Mentor:   mentor@tamu.edu / 123456
+Alumni:   alumni@tamu.edu / 123456
+Admin:    admin@tamu.edu / 123456
+Faculty:  faculty@tamu.edu / 123456
+
+
+URLS
+========================================
+Frontend:    http://localhost:3000
+Backend API: http://localhost:5000
+Health:      http://localhost:5000/health
+API Routes:  http://localhost:5000/api
+
+
+FEATURES TO TEST
+========================================
+✅ Authentication & Role-based Redirect
+✅ Student Dashboard & Profile
+✅ Mentor Recommendations (Skills-based)
+✅ Alumni Role Switcher (Mentor/Judge/Speaker)
+✅ Admin Dashboard & Analytics
+✅ Industry Portal
+✅ Events CRUD
+✅ Connections & Mentorship
+✅ Notifications
+✅ Global Search
+✅ Lambda Functions (if AWS configured)
+✅ S3 Resume Upload (if AWS configured)
+✅ DynamoDB Extended Profiles (if AWS configured)
+
+
+

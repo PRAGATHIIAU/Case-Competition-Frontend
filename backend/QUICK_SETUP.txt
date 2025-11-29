@@ -1,0 +1,32 @@
+===========================================
+CMIS Backend - Quick Setup Instructions
+===========================================
+
+1. INSTALL DEPENDENCIES
+   npm install
+
+2. SET UP ENVIRONMENT
+   npm run setup-env
+   (OR manually copy .env.example to .env and edit it)
+
+3. CREATE DATABASE
+   psql -U postgres
+   CREATE DATABASE cmis_db;
+   \q
+
+4. RUN MIGRATIONS
+   npm run migrate
+
+5. (OPTIONAL) SEED DATA
+   npm run seed
+
+6. START SERVER
+   npm run dev
+
+Server will run on http://localhost:5000
+
+For detailed instructions, see ../INTEGRATION_GUIDE.md
+
+
+
+

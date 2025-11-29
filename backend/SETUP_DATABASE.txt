@@ -1,0 +1,42 @@
+===========================================
+QUICK DATABASE SETUP
+===========================================
+
+1. INSTALL POSTGRESQL
+   Download: https://www.postgresql.org/download/windows/
+   Install and remember the password you set
+
+2. CREATE DATABASE
+   Open Command Prompt:
+   psql -U postgres
+   (Enter password)
+   CREATE DATABASE alumni_portal;
+   \l
+   \q
+
+3. CREATE .env FILE
+   In backend folder, create .env file with:
+   
+   PORT=5000
+   NODE_ENV=development
+   DB_HOST=localhost
+   DB_PORT=5432
+   DB_NAME=alumni_portal
+   DB_USER=postgres
+   DB_PASSWORD=your_password_here
+   JWT_SECRET=your_secret_key
+   CORS_ORIGIN=http://localhost:3000
+
+4. INITIALIZE TABLES
+   cd backend
+   npm run init-all
+
+5. TEST
+   Open: http://localhost:5000/health
+   Should show: "database": "connected"
+
+===========================================
+
+
+
+
