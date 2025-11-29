@@ -47,5 +47,3 @@ You should now see:
 - Vite proxy forwards `/api/*` requests to backend automatically
 
 
-
-

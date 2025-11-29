@@ -144,5 +144,3 @@ Check backend terminal when making API calls - should see:
 
 **Run the command now and check pgAdmin!** 🚀
 
-
-

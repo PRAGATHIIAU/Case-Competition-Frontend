@@ -44,5 +44,3 @@ User.hasMany(Lecture, { foreignKey: 'professorId', as: 'lectures' });
 
 module.exports = Lecture;
 
-
-

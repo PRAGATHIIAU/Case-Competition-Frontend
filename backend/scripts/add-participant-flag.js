@@ -58,5 +58,3 @@ async function addParticipantFlag() {
 
 addParticipantFlag();
 
-
-

@@ -70,5 +70,3 @@ async function fixStudentsTable() {
 
 fixStudentsTable();
 
-
-

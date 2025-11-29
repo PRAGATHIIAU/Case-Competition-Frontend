@@ -38,5 +38,3 @@ module.exports = {
   CREATE_LECTURES_TABLE_QUERY,
 };
 
-
-

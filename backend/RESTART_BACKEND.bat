@@ -8,5 +8,3 @@ timeout /t 2 /nobreak >nul
 echo Starting backend server...
 npm start
 
-
-

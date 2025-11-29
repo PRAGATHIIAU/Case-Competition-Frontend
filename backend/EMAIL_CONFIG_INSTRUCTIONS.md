@@ -54,5 +54,3 @@ If emails still don't arrive:
 3. Make sure 2-Step Verification is enabled on your Google account
 4. Check spam/junk folder
 
-
-

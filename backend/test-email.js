@@ -72,5 +72,3 @@ async function testEmail() {
 // Run test
 testEmail();
 
-
-

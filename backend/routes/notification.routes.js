@@ -11,5 +11,3 @@ router.put('/:id/read', notificationController.markAsRead);
 module.exports = router;
 
 
-
-

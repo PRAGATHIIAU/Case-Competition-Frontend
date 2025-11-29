@@ -37,5 +37,3 @@ FROM_EMAIL=darshilrayjada4154@gmail.com
 ADMIN_EMAIL=aupragathii@gmail.com  ← You may want to change this too
 ```
 
-
-

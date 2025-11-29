@@ -84,5 +84,3 @@ async function testDirectInsert() {
 
 testDirectInsert();
 
-
-

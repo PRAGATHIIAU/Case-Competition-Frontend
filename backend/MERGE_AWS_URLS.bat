@@ -35,5 +35,3 @@ echo Done! Your .env file is configured.
 echo ========================================
 pause
 
-
-

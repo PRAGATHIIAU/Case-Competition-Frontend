@@ -39,5 +39,3 @@ const Competition = sequelize.define('Competition', {
 
 module.exports = Competition;
 
-
-

@@ -156,5 +156,3 @@ Just open these URLs:
 3. What you see in the backend console
 
 
-
-

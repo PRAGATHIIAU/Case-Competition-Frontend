@@ -143,5 +143,3 @@ updated_at TIMESTAMP
 
 **Everything is now connected! Data will save to PostgreSQL!** 🎉
 
-
-

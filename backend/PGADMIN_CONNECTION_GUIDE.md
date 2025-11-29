@@ -110,5 +110,3 @@ postgresql://postgres:*Uvpt1077@alumni-portal.cy7wwmkqs2ax.us-east-1.rds.amazona
 - Make sure your IP address is whitelisted in the RDS security group
 - The password contains special characters, so be careful when typing
 
-
-

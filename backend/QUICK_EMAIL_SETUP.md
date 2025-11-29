@@ -78,5 +78,3 @@ EMAIL_PASSWORD=your-outlook-app-password
 FROM_EMAIL=your-email@outlook.com
 ```
 
-
-

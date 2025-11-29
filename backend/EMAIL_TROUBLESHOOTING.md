@@ -84,5 +84,3 @@ SMTP_PORT=587 ✅
 
 If you still don't receive emails after checking spam, let me know what you see in the backend console when you click RSVP!
 
-
-

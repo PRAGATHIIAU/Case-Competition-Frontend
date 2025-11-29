@@ -140,5 +140,3 @@ Everything is set up and ready for your presentation. The system is stable with:
 
 **Good luck!** 🚀
 
-
-

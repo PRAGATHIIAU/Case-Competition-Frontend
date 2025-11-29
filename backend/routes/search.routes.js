@@ -8,5 +8,3 @@ router.get('/', searchController.globalSearch);
 module.exports = router;
 
 
-
-

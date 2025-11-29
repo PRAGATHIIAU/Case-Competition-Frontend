@@ -77,5 +77,3 @@ When RSVP request reaches backend, you should see:
 
 This will help identify exactly where the issue is!
 
-
-

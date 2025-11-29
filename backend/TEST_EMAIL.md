@@ -53,5 +53,3 @@ http://localhost:5000/api/email/check
 
 Should show: `"emailConfigured": true`
 
-
-

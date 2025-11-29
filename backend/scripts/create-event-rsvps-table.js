@@ -67,5 +67,3 @@ async function createEventRSVPsTable() {
 
 createEventRSVPsTable();
 
-
-

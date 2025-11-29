@@ -34,5 +34,3 @@ ADMIN_EMAIL=aupragathii@gmail.com
 
 **Important:** The password must have NO SPACES!
 
-
-

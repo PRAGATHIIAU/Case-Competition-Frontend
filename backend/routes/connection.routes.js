@@ -17,5 +17,3 @@ router.put('/requests/:id', connectionController.updateRequestStatus);
 module.exports = router;
 
 
-
-
