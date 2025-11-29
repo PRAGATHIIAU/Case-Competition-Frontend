@@ -45,5 +45,3 @@ I've created `START_FRONTEND.cmd` in the root folder - just double-click it!
 
 **The frontend is now starting!** 🎉
 
-
-

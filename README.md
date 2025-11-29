@@ -446,6 +446,7 @@ This project is licensed under the MIT License.
 ## 👨‍💻 Authors
 
 - **PRAGATHIIAU** - [GitHub](https://github.com/PRAGATHIIAU)
+- **DARSHIL4154** - [GitHub](https://github.com/Darshil4154)
 
 ## 🙏 Acknowledgments
 

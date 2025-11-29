@@ -1,0 +1,55 @@
+╔══════════════════════════════════════════════════════════════╗
+║         CMIS ENGAGEMENT PLATFORM - HOW TO RUN                ║
+╚══════════════════════════════════════════════════════════════╝
+
+📋 EASIEST WAY (Windows):
+   
+   1. Double-click: start.bat
+   
+   That's it! It will install everything and run automatically.
+
+
+📋 MANUAL WAY:
+
+   Step 1: Open Terminal/Command Prompt in the "frontend" folder
+   
+   Step 2: Type: npm install
+           (Wait 2-5 minutes for installation)
+   
+   Step 3: Type: npm run dev
+   
+   Step 4: Open browser to: http://localhost:3000
+
+
+📋 TO STOP THE APP:
+   
+   Press: Ctrl + C (in the terminal)
+
+
+❓ TROUBLESHOOTING:
+
+   Problem: "npm: command not found"
+   → Install Node.js from https://nodejs.org/
+
+   Problem: Can't find the frontend folder
+   → Navigate to: C:\Users\darsh\Downloads\MCP-server--datathon-main\frontend
+
+   Problem: Installation takes too long
+   → This is normal! Wait 2-5 minutes for first install
+
+
+🌐 TO DEPLOY ONLINE:
+
+   See: DEPLOYMENT.md (for Vercel, Netlify, or GitHub Pages)
+
+
+📚 MORE HELP:
+
+   - QUICK_START.md     → Fast setup guide
+   - SETUP.md           → Detailed instructions
+   - DEPLOYMENT.md      → Deploy to the web
+   - README.md          → Full documentation
+
+
+═══════════════════════════════════════════════════════════════
+

@@ -247,5 +247,3 @@ export const getAccessLevelDescription = (user = null) => {
   return 'Limited Access'
 }
 
-
-
