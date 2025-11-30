@@ -267,13 +267,16 @@ const validateSignupData = (studentData, file) => {
     throw new Error('Invalid email format');
   }
 
-  // Validate grad_year if provided
-  if (grad_year !== undefined && grad_year !== null) {
+  // Validate grad_year ONLY if it's provided and not empty (it's optional)
+  // Skip validation if grad_year is undefined, null, empty string, or falsy
+  if (grad_year !== undefined && grad_year !== null && grad_year !== '' && String(grad_year).trim() !== '') {
     const year = parseInt(grad_year);
+    // Only validate if it's a valid number and within reasonable range
     if (isNaN(year) || year < 1900 || year > 2100) {
-      throw new Error('Graduation year must be a valid year');
+      throw new Error('Graduation year must be a valid year (between 1900 and 2100)');
     }
   }
+  // If grad_year is not provided, null, undefined, or empty string, that's fine - it's optional
 
   // File validation (if provided)
   if (file) {
@@ -363,6 +366,7 @@ const signup = async (studentData, file) => {
     } = studentData;
 
     // Prepare RDS data (atomic fields)
+    // Only include grad_year if it's a valid number (it's optional)
     const rdsData = {
       name,
       email,
@@ -370,7 +374,13 @@ const signup = async (studentData, file) => {
       contact,
       linkedin_url,
       major,
-      grad_year,
+      // Only set grad_year if it's provided and valid, otherwise set to null (optional field)
+      grad_year: (grad_year !== undefined && grad_year !== null && grad_year !== '' && String(grad_year).trim() !== '') 
+        ? (() => {
+            const year = parseInt(grad_year);
+            return (!isNaN(year) && year >= 1900 && year <= 2100) ? year : null;
+          })()
+        : null, // Set to null if not provided or invalid (optional field)
     };
 
     // Create student in RDS PostgreSQL

@@ -194,8 +194,20 @@ export const studentAPI = {
     return apiFormDataRequest('/students/create-or-update', formData);
   },
   
-  // Signup new student
+  // Signup new user (uses new simple endpoint)
   signup: async (signupData) => {
+    // Try new simple endpoint first
+    try {
+      return await apiFormDataRequest('/api/signup', 'POST', signupData);
+    } catch (error) {
+      // Fallback to old endpoint
+      console.warn('New signup endpoint failed, trying old endpoint:', error);
+      return await apiFormDataRequest('/api/auth/signup', 'POST', signupData);
+    }
+  },
+  
+  // Signup new student (old method - kept for backward compatibility)
+  signupOld: async (signupData) => {
     const formData = new FormData();
     Object.keys(signupData).forEach(key => {
       if (signupData[key] !== null && signupData[key] !== undefined) {
@@ -312,7 +324,7 @@ export const searchAPI = {
  * Auth API
  */
 export const authAPI = {
-  // Signup
+  // Signup - uses new simple endpoint at /api/signup
   signup: async (signupData) => {
     const formData = new FormData();
     Object.keys(signupData).forEach(key => {
@@ -325,7 +337,14 @@ export const authAPI = {
       }
     });
     
-    return apiFormDataRequest('/auth/signup', formData);
+    // Try new simple endpoint first
+    try {
+      return await apiFormDataRequest('/signup', formData, { method: 'POST' });
+    } catch (error) {
+      // Fallback to old endpoint
+      console.warn('New signup endpoint failed, trying old endpoint:', error);
+      return await apiFormDataRequest('/auth/signup', formData, { method: 'POST' });
+    }
   },
   
   // Login - returns { token, user: { id, email, name, role, ... } }

@@ -1,48 +1,44 @@
 /**
- * Migration Script: Add is_participant Column
- * Adds is_participant boolean column to users table
+ * Add is_participant column to users table
+ * This column is used to identify faculty (false) vs admin (true)
  */
 
 require('dotenv').config();
-const pool = require('../config/db');
+const pool = require('../config/db.cjs');
 
 async function addParticipantColumn() {
   try {
-    console.log('🔄 Adding is_participant column to users table...');
-    console.log('📊 Database:', process.env.DB_NAME || 'alumni_portal');
-    console.log('📊 Host:', process.env.DB_HOST || 'localhost');
-
-    // Check if column already exists
-    const checkResult = await pool.query(`
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_name='users' AND column_name='is_participant'
-    `);
-
-    if (checkResult.rows.length > 0) {
-      console.log('✅ Column is_participant already exists!');
-      process.exit(0);
-    }
-
+    console.log('📝 Adding is_participant column to users table...');
+    
     // Add the column
     await pool.query(`
-      ALTER TABLE users
-      ADD COLUMN is_participant BOOLEAN DEFAULT FALSE NOT NULL;
+      ALTER TABLE users 
+      ADD COLUMN IF NOT EXISTS is_participant BOOLEAN DEFAULT FALSE
     `);
-
-    console.log('✅ Successfully added is_participant column!');
+    
+    console.log('✅ Column added successfully');
+    
+    // Verify it exists
+    const result = await pool.query(`
+      SELECT column_name, data_type, column_default
+      FROM information_schema.columns
+      WHERE table_name = 'users' 
+      AND column_name = 'is_participant'
+    `);
+    
+    if (result.rows.length > 0) {
+      console.log('\n📋 is_participant column in users table:');
+      const row = result.rows[0];
+      console.log(`  - ${row.column_name} (${row.data_type}, default: ${row.column_default})`);
+    } else {
+      console.log('\n⚠️ Column not found after creation');
+    }
+    
     process.exit(0);
   } catch (error) {
-    console.error('❌ Migration failed:', error.message);
-    console.error('   Code:', error.code);
-    if (error.detail) {
-      console.error('   Detail:', error.detail);
-    }
+    console.error('❌ Error adding column:', error.message);
     process.exit(1);
-  } finally {
-    await pool.end();
   }
 }
 
 addParticipantColumn();
-

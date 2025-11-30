@@ -30,8 +30,15 @@ export default function ProtectedRoute({ children, requiredRole = null, allowedR
     let user
     try {
       user = JSON.parse(userStr)
-      const role = user.role || 'student'
+      // Check userType first (new backend format), then role (old format), then default to 'student'
+      const role = user.userType || user.role || 'student'
       setUserRole(role)
+      
+      // Update localStorage with role if it's missing but userType exists (for backward compatibility)
+      if (!user.role && user.userType) {
+        user.role = user.userType
+        localStorage.setItem('user', JSON.stringify(user))
+      }
       
       // Check role - either specific role or allowed roles array
       let hasAccess = false

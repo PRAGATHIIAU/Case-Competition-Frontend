@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const helloController = require('../controllers/helloController');
 const authRoutes = require('./auth.routes');
+const signupRoutes = require('./signup.routes'); // New simple signup route
 // Use event.routes.js which uses controllers (CommonJS compatible)
 const eventRoutes = require('./event.routes');
 const competitionRoutes = require('./competition.routes');
@@ -11,6 +12,7 @@ const connectionRoutes = require('./connection.routes');
 const notificationRoutes = require('./notification.routes');
 const searchRoutes = require('./search.routes');
 const adminRoutes = require('./admin.routes');
+const matchingRoutes = require('./matching.routes');
 
 // Routes
 router.get('/', helloController.getHello);
@@ -51,6 +53,7 @@ router.get('/api/email/check', (req, res) => {
 
 // API Routes
 router.use('/api/auth', authRoutes);
+router.use('/api/signup', signupRoutes); // New simple signup endpoint
 router.use('/api/events', eventRoutes);
 router.use('/api/competitions', competitionRoutes);
 router.use('/api/students', studentRoutes);
@@ -58,6 +61,7 @@ router.use('/api/mentors', mentorRoutes);
 router.use('/api', connectionRoutes);
 router.use('/api', notificationRoutes);
 router.use('/api', searchRoutes);
+router.use('/api/matching', matchingRoutes);
 
 // Admin Routes
 router.use('/admin', adminRoutes);

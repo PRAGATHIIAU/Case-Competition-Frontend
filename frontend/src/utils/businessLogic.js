@@ -3,10 +3,24 @@
 /**
  * Parse resume and extract skills/tags
  * Simulates AI-powered resume parsing
+ * @param {File} resumeFile - The resume file to parse (PDF or Word document)
  */
 export const parseResume = async (resumeFile) => {
+  // Validate file
+  if (!resumeFile) {
+    throw new Error('No file provided. Please select a resume file to upload.')
+  }
+  
+  console.log('📄 Parsing resume file:', resumeFile.name, 'Size:', resumeFile.size, 'bytes')
+  
   // Simulate scanning/parsing delay
   await new Promise(resolve => setTimeout(resolve, 2000))
+  
+  // In a real implementation, you would:
+  // 1. Read the file content (PDF.js for PDFs, mammoth.js for Word docs)
+  // 2. Extract text from the file
+  // 3. Use NLP/AI to identify skills, experience, etc.
+  // For now, we simulate this with mock data
   
   // Simulate extracted skills based on common resume keywords
   const allPossibleSkills = [
@@ -21,9 +35,13 @@ export const parseResume = async (resumeFile) => {
   const shuffled = [...allPossibleSkills].sort(() => 0.5 - Math.random())
   const extractedSkills = shuffled.slice(0, Math.floor(Math.random() * 4) + 5)
   
+  console.log('✅ Extracted skills from resume:', extractedSkills)
+  
   return {
     skills: extractedSkills,
-    parsedAt: new Date().toISOString()
+    parsedAt: new Date().toISOString(),
+    fileName: resumeFile.name,
+    fileSize: resumeFile.size
   }
 }
 

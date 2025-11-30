@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Upload, User, Mail, GraduationCap, FileText, Sparkles, Scan, Users, TrendingUp, Save, Loader2, Linkedin, Github, BookOpen, Trophy } from 'lucide-react'
 import { parseResume } from '../../utils/businessLogic'
@@ -23,9 +23,17 @@ export default function ProfileSection({ onSkillsUpdated, allMentors = [] }) {
     coursework: ''
   })
   
-  // Initialize profile data from currentUser
+  const [hasInitialized, setHasInitialized] = useState(false)
+  const [initializedUserId, setInitializedUserId] = useState(null)
+  
+  // Initialize profile data from currentUser ONCE when currentUser becomes available
+  // CRITICAL: Only initialize once per user - never reset the form while user is typing!
   useEffect(() => {
-    if (currentUser) {
+    // Only initialize if:
+    // 1. currentUser exists
+    // 2. We haven't initialized yet OR the user ID changed (different user logged in)
+    if (currentUser && currentUser.id && (initializedUserId === null || initializedUserId !== currentUser.id)) {
+      console.log('📥 Initializing profile form data from currentUser (ONCE per user)')
       setProfileData({
         name: currentUser.name || '',
         email: currentUser.email || '',
@@ -36,6 +44,8 @@ export default function ProfileSection({ onSkillsUpdated, allMentors = [] }) {
         portfolioUrl: currentUser.portfolioUrl || '',
         coursework: currentUser.coursework || ''
       })
+      setHasInitialized(true)
+      setInitializedUserId(currentUser.id)
       
       // Auto-check badges when profile loads
       if (currentUser.id) {
@@ -44,7 +54,8 @@ export default function ProfileSection({ onSkillsUpdated, allMentors = [] }) {
         }, 1000)
       }
     }
-  }, [currentUser, checkBadges])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id]) // Only re-run when user ID changes (login/logout), NOT when currentUser object reference changes
   
   // Profile save state
   const [isSaving, setIsSaving] = useState(false)
@@ -56,6 +67,7 @@ export default function ProfileSection({ onSkillsUpdated, allMentors = [] }) {
   const [parsingProgress, setParsingProgress] = useState('')
   const [recommendedMentors, setRecommendedMentors] = useState([])
   const [isLoadingMentors, setIsLoadingMentors] = useState(false)
+  const fileInputRef = useRef(null)
   
   // Toast state
   const [showToast, setShowToast] = useState(false)
@@ -113,6 +125,25 @@ export default function ProfileSection({ onSkillsUpdated, allMentors = [] }) {
       }
       
       if (result.success || result.data) {
+        // CRITICAL: Update localStorage with the saved profile data
+        const updatedUser = {
+          ...currentUser,
+          ...profileUpdateData,
+          // Ensure email and role are preserved
+          email: currentUser?.email || profileData.email,
+          role: currentUser?.role || 'student',
+        }
+        
+        // Save to localStorage
+        localStorage.setItem('user', JSON.stringify(updatedUser))
+        console.log('💾 Saved profile to localStorage:', updatedUser)
+        
+        // Also update the form state to reflect saved values
+        setProfileData(prev => ({
+          ...prev,
+          ...profileUpdateData
+        }))
+        
         setToastMessage('Profile Updated Successfully!')
         setToastType('success')
         setShowToast(true)
@@ -131,7 +162,42 @@ export default function ProfileSection({ onSkillsUpdated, allMentors = [] }) {
     }
   }
 
-  const handleResumeUpload = async () => {
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      handleResumeUpload(file)
+    }
+  }
+
+  const handleResumeUpload = async (resumeFile) => {
+    // If no file provided, trigger file input
+    if (!resumeFile) {
+      fileInputRef.current?.click()
+      return
+    }
+    
+    // Validate file type
+    const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+    const allowedExtensions = ['.pdf', '.doc', '.docx']
+    const fileExtension = '.' + resumeFile.name.split('.').pop().toLowerCase()
+    
+    if (!allowedTypes.includes(resumeFile.type) && !allowedExtensions.includes(fileExtension)) {
+      setToastMessage('Invalid file type. Please upload a PDF or Word document.')
+      setToastType('error')
+      setShowToast(true)
+      setTimeout(() => setShowToast(false), 3000)
+      return
+    }
+    
+    // Validate file size (max 5MB)
+    if (resumeFile.size > 5 * 1024 * 1024) {
+      setToastMessage('File too large. Please upload a file smaller than 5MB.')
+      setToastType('error')
+      setShowToast(true)
+      setTimeout(() => setShowToast(false), 3000)
+      return
+    }
+    
     setIsParsing(true)
     setParsingProgress('Scanning resume...')
     
@@ -142,11 +208,17 @@ export default function ProfileSection({ onSkillsUpdated, allMentors = [] }) {
     
     try {
       // Step 1: Parse resume and extract skills
-      const result = await parseResume(null)
+      const result = await parseResume(resumeFile)
       setSkills(result.skills)
       setParsed(true)
       setIsParsing(false)
       setParsingProgress('')
+      
+      // Update profile data with extracted skills
+      setProfileData(prev => ({
+        ...prev,
+        skills: result.skills
+      }))
       
       // Step 2: Immediately fetch recommended mentors based on skills
       setIsLoadingMentors(true)
@@ -222,11 +294,12 @@ export default function ProfileSection({ onSkillsUpdated, allMentors = [] }) {
               </label>
               <input
                 type="email"
-                value={profileData.email}
-                onChange={(e) => handleProfileChange('email', e.target.value)}
+                value={profileData.email || currentUser?.email || ''}
+                readOnly
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tamu-maroon focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 cursor-not-allowed text-gray-600"
                 placeholder="your.email@tamu.edu"
+                title="Email cannot be changed. It is your login identifier."
               />
             </div>
             <div className="space-y-2">
@@ -496,6 +569,13 @@ export default function ProfileSection({ onSkillsUpdated, allMentors = [] }) {
             </motion.div>
           ) : (
             <div className="space-y-4">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
               <Upload className="w-12 h-12 text-gray-400 mx-auto" />
               <div>
                 <p className="text-gray-600 mb-2">Upload your resume for AI-powered parsing</p>
@@ -503,9 +583,10 @@ export default function ProfileSection({ onSkillsUpdated, allMentors = [] }) {
                   We'll automatically extract your skills and experience
                 </p>
                 <motion.button
+                  type="button"
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={handleResumeUpload}
+                  onClick={() => handleResumeUpload(null)}
                   className="bg-tamu-maroon text-white px-6 py-2 rounded-lg font-medium hover:bg-tamu-maroon-light transition-colors"
                 >
                   Upload Resume

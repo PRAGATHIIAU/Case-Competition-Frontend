@@ -106,14 +106,13 @@ export default function EditProfileTab() {
         // But check if the data is actually different to avoid unnecessary reloads
         try {
           const newUserData = JSON.parse(e.newValue)
-          const currentMajor = profileData.major
-          const newMajor = newUserData.major || ''
-          
           // Only reload if the data is significantly different (from another tab)
           // Don't reload if it's just our own save (which would reset the form)
-          if (currentMajor !== newMajor && newMajor) {
-            console.log('🔄 Reloading from other tab:', { currentMajor, newMajor })
-            loadUserData()
+          // Compare user ID to ensure it's the same user
+          if (user && newUserData.id === user.id) {
+            // Only reload if we detect a meaningful change from another tab
+            // Skip if we're currently editing (hasLoaded means we've started editing)
+            console.log('🔄 Storage change detected from another tab, but skipping reload to preserve form state')
           }
         } catch (err) {
           console.error('Error parsing storage change:', err)
@@ -125,7 +124,8 @@ export default function EditProfileTab() {
     return () => {
       window.removeEventListener('storage', handleStorageChange)
     }
-  }, [hasLoaded, isSavingProfile, profileData.major]) // Add profileData.major to dependencies
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasLoaded, isSavingProfile]) // REMOVED profileData.major and user - these were causing form resets!
 
   const handleProfileChange = (field, value) => {
     console.log(`📝 Form field changed: ${field} = "${value}"`)
@@ -431,14 +431,10 @@ export default function EditProfileTab() {
             <input
               type="email"
               value={profileData.email || user?.email || ''}
-              onChange={(e) => {
-                // Email should not be changed - it's the login identifier
-                console.warn('⚠️ Email change attempted - email cannot be changed (it is your login identifier)')
-              }}
+              readOnly
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tamu-maroon focus:border-transparent bg-gray-50 cursor-not-allowed"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 cursor-not-allowed text-gray-600"
               placeholder="your.email@tamu.edu"
-              disabled
               title="Email cannot be changed. It is your login identifier."
             />
           </div>

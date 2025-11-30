@@ -362,13 +362,9 @@ const signup = async (userData, file) => {
       achievements,
     } = userData;
 
-    // Prepare RDS data (atomic fields + willingness flags + role + skills)
-    // Validate role if provided
-    const validRoles = ['student', 'mentor', 'alumni', 'faculty', 'admin', 'judge', 'guest_speaker'];
-    const userRole = userData.role || 'student';
-    if (userRole && !validRoles.includes(userRole)) {
-      throw new Error(`Invalid role. Must be one of: ${validRoles.join(', ')}`);
-    }
+    // Prepare RDS data (atomic fields + willingness flags + skills)
+    // NO role field - users table doesn't have role column
+    // User type is determined by which table they're in (students vs users)
 
     // Process skills - can come as array, string, or comma-separated string
     let skillsArray = [];
@@ -400,13 +396,16 @@ const signup = async (userData, file) => {
       name,
       password: hashedPassword,
       contact,
-      role: userRole,
+      // NO role field - users table doesn't have role column
       skills: skillsArray,
-      willing_to_be_mentor,
+      // Users table only has willing_to_be_* columns, not is_* columns
+      // Convert isMentor/isJudge to willing_to_be_mentor/willing_to_be_judge
+      willing_to_be_mentor: (isMentor === true || isMentor === 'true' || isMentor === '1' || willing_to_be_mentor === 'yes' || willing_to_be_mentor === true),
       mentor_capacity,
-      willing_to_be_judge,
-      willing_to_be_sponsor,
-      // Unified Identity: Alumni role flags
+      willing_to_be_judge: (isJudge === true || isJudge === 'true' || isJudge === '1' || willing_to_be_judge === 'yes' || willing_to_be_judge === true),
+      willing_to_be_sponsor: willing_to_be_sponsor === 'yes' || willing_to_be_sponsor === true || false,
+      willing_to_be_speaker: (isSpeaker === true || isSpeaker === 'true' || isSpeaker === '1' || false), // Separate from sponsor
+      // Pass isMentor/isJudge/isSpeaker for repository to use (will be converted to willing_to_be_*)
       isMentor: isMentor || false,
       isJudge: isJudge || false,
       isSpeaker: isSpeaker || false,
@@ -415,7 +414,21 @@ const signup = async (userData, file) => {
     };
 
     // Create user in RDS PostgreSQL
+    console.log('📝 Creating user with rdsData:', {
+      email: rdsData.email,
+      name: rdsData.name,
+      hasWillingToBeMentor: rdsData.willing_to_be_mentor !== undefined,
+      hasWillingToBeJudge: rdsData.willing_to_be_judge !== undefined,
+      hasIsMentor: rdsData.isMentor !== undefined,
+      hasIsJudge: rdsData.isJudge !== undefined,
+    });
     const newUser = await userRepository.createUser(rdsData);
+    console.log('✅ User created successfully:', {
+      id: newUser.id,
+      email: newUser.email,
+      willing_to_be_mentor: newUser.willing_to_be_mentor,
+      willing_to_be_judge: newUser.willing_to_be_judge,
+    });
 
     // Prepare DynamoDB profile data (if any profile fields provided OR resume uploaded)
     const hasProfileData = skills || aspirations || parsed_resume || 
@@ -462,19 +475,27 @@ const signup = async (userData, file) => {
       console.warn('Resume URL added to response despite DynamoDB save failure for user:', newUser.id);
     }
 
-    // Ensure role is included in merged user
-    const userWithRole = {
+    // User type is determined by which table they're in (not role column)
+    // Students are in students table, others are in users table
+    const userWithType = {
       ...mergedUser,
       id: newUser.id,
       email: newUser.email,
       name: newUser.name,
-      role: newUser.role || 'student', // Include role from database
+      userType: 'alumni', // Users table = alumni/mentors (determined by table, not role column)
       skills: newUser.skills || mergedUser.skills || [],
+      isMentor: newUser.willing_to_be_mentor || false,
+      isJudge: newUser.willing_to_be_judge || false,
+      isSpeaker: newUser.willing_to_be_speaker || false, // Use willing_to_be_speaker column
+      willing_to_be_mentor: newUser.willing_to_be_mentor || false,
+      willing_to_be_judge: newUser.willing_to_be_judge || false,
+      willing_to_be_sponsor: newUser.willing_to_be_sponsor || false,
+      willing_to_be_speaker: newUser.willing_to_be_speaker || false,
     };
 
     // Generate JWT token
     const token = jwt.sign(
-      { userId: newUser.id, email: newUser.email, role: newUser.role || 'student' },
+      { userId: newUser.id, email: newUser.email, userType: 'alumni' },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -505,11 +526,22 @@ const getUserWithProfile = async (userId) => {
       throw new Error('User not found');
     }
 
-    const userRole = user.role || 'student';
+    // Determine userType based on which table they're in, not role column
+    // Check if user exists in students table (by email)
+    let userType = 'alumni'; // Default to alumni if in users table
+    try {
+      const studentRepository = require('../repositories/student.repository');
+      const student = await studentRepository.getStudentByEmail(user.email);
+      if (student) {
+        userType = 'student';
+      }
+    } catch (err) {
+      console.warn('⚠️ Could not check students table:', err.message);
+    }
 
     // Get role-specific data (students table for students, mentors table for mentors/alumni)
     let roleSpecificData = {};
-    if (userRole === 'student') {
+    if (userType === 'student') {
       try {
         const studentRepository = require('../repositories/student.repository');
         const student = await studentRepository.getStudentByEmail(user.email);
@@ -523,7 +555,7 @@ const getUserWithProfile = async (userId) => {
       } catch (err) {
         console.warn('⚠️ Could not fetch student data:', err.message);
       }
-    } else if (userRole === 'mentor' || userRole === 'alumni') {
+    } else if (userType === 'alumni' || userType === 'mentor') {
       try {
         const mentorRepository = require('../repositories/mentor.repository');
         const mentor = await mentorRepository.getMentorByUserId(userId);
@@ -548,17 +580,17 @@ const getUserWithProfile = async (userId) => {
         id: user.id,
         email: user.email,
         name: user.name,
-        role: userRole,
+        userType: userType,
         contact: user.contact,
         skills: user.skills || profile.skills || [], // Prefer RDS skills, fallback to DynamoDB
         willing_to_be_mentor: user.willing_to_be_mentor || false,
         mentor_capacity: user.mentor_capacity || null,
         willing_to_be_judge: user.willing_to_be_judge || false,
         willing_to_be_sponsor: user.willing_to_be_sponsor || false,
-        // Unified Identity: Include role flags
-        isMentor: user.is_mentor || false,
-        isJudge: user.is_judge || false,
-        isSpeaker: user.is_speaker || false,
+        // Unified Identity: Include role flags (convert from willing_to_be_*)
+        isMentor: user.willing_to_be_mentor || false,
+        isJudge: user.willing_to_be_judge || false,
+        isSpeaker: user.willing_to_be_speaker || false, // Use willing_to_be_speaker column
         // Admin/Participant flag
         isParticipant: user.is_participant || false,
         created_at: user.created_at,
@@ -583,12 +615,12 @@ const getUserWithProfile = async (userId) => {
       // No profile data, return only RDS data with empty profile fields
       return {
         ...user,
-        role: userRole,
+        userType: userType,
         skills: user.skills || [], // Include skills from RDS
-        // Unified Identity: Include role flags
-        isMentor: user.is_mentor || false,
-        isJudge: user.is_judge || false,
-        isSpeaker: user.is_speaker || false,
+        // Unified Identity: Include role flags (convert from willing_to_be_*)
+        isMentor: user.willing_to_be_mentor || false,
+        isJudge: user.willing_to_be_judge || false,
+        isSpeaker: user.willing_to_be_speaker || false, // Use willing_to_be_speaker column
         // Role-specific data (from students or mentors table)
         ...roleSpecificData,
         // Profile fields (empty if no DynamoDB profile)
@@ -612,7 +644,7 @@ const getUserWithProfile = async (userId) => {
 };
 
 /**
- * Login user
+ * Login user (checks students, users, and faculty tables)
  * @param {string} email - User email
  * @param {string} password - User password
  * @returns {Promise<Object>} User object and token (merged from RDS + DynamoDB)
@@ -628,62 +660,149 @@ const login = async (email, password) => {
       throw new Error('Password is required');
     }
 
-    // Get user by email
-    const user = await userRepository.getUserByEmail(email);
+    const pool = require('../config/db.cjs');
+    let user = null;
+    let userType = null; // Changed from 'role' to 'userType' - determined by table, not column
+    let userId = null;
+    let userData = null;
+
+    // 1. Check students table first
+    try {
+      const studentResult = await pool.query(`
+        SELECT student_id, email, password, name
+        FROM students
+        WHERE email = $1
+      `, [email]);
+
+      if (studentResult.rows.length > 0) {
+        const student = studentResult.rows[0];
+        const isValid = await bcrypt.compare(password, student.password);
+        if (isValid) {
+          user = student;
+          // Student found - userType is 'student' (determined by table)
+          userId = student.student_id;
+          userData = {
+            id: student.student_id,
+            email: student.email,
+            name: student.name,
+            userType: 'student' // Determined by table, not role column
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('Error checking students table:', err.message);
+    }
+
+    // 2. If not found in students, check users table (for alumni/mentors)
+    if (!user) {
+      try {
+        // Users table doesn't have role column or is_mentor/is_judge/is_speaker columns
+        // Has: willing_to_be_mentor, willing_to_be_judge, willing_to_be_sponsor, willing_to_be_speaker, is_participant
+        const userResult = await pool.query(`
+          SELECT id, email, password, name, willing_to_be_mentor, willing_to_be_judge, willing_to_be_sponsor, willing_to_be_speaker, is_participant
+          FROM users
+          WHERE email = $1
+        `, [email]);
+
+        if (userResult.rows.length > 0) {
+          const userRow = userResult.rows[0];
+          let isValid = false;
+          if (userRow.password) {
+            isValid = await bcrypt.compare(password, userRow.password);
+          } else if (userRow.password_hash) {
+            isValid = await bcrypt.compare(password, userRow.password_hash);
+          }
+
+          if (isValid) {
+            user = userRow;
+            // Users table doesn't have role column - userType is 'alumni' (determined by table)
+            userId = userRow.id;
+            // Flags are already in userRow from the SELECT query above
+            // Determine userType based on flags and is_participant
+            // First check if it's faculty/admin (is_participant flag)
+            let determinedUserType = 'alumni'; // Default
+            if (userRow.is_participant) {
+              determinedUserType = 'admin'; // is_participant = true means admin
+            } else if (userRow.willing_to_be_speaker && !userRow.willing_to_be_mentor && !userRow.willing_to_be_judge && !userRow.is_participant) {
+              determinedUserType = 'speaker'; // Only speaker, no other roles
+            } else if (userRow.willing_to_be_speaker && !userRow.is_participant) {
+              determinedUserType = 'alumni'; // Speaker + other roles = alumni (unified identity)
+            } else if (!userRow.willing_to_be_mentor && !userRow.willing_to_be_judge && !userRow.willing_to_be_speaker && !userRow.is_participant) {
+              // No flags set and not participant - could be faculty
+              determinedUserType = 'faculty';
+            }
+            
+            userData = {
+              id: userRow.id,
+              email: userRow.email,
+              name: userRow.name,
+              userType: determinedUserType,
+              isMentor: userRow.willing_to_be_mentor || false,
+              isJudge: userRow.willing_to_be_judge || false,
+              isSpeaker: userRow.willing_to_be_speaker || false, // Use willing_to_be_speaker column (separate from sponsor)
+              isParticipant: userRow.is_participant || false, // For faculty/admin identification
+              willing_to_be_mentor: userRow.willing_to_be_mentor || false,
+              willing_to_be_judge: userRow.willing_to_be_judge || false,
+              willing_to_be_sponsor: userRow.willing_to_be_sponsor || false
+            };
+          }
+        }
+      } catch (err) {
+        console.warn('Error checking users table:', err.message);
+      }
+    }
+
+    // 3. Faculty table is removed - no longer checking it
+    // If user is not found in students or users table, they don't exist
+
+    // If no user found in any table
     if (!user) {
       throw new Error('Invalid email or password');
     }
 
-    // Verify password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      throw new Error('Invalid email or password');
-    }
+    // userType is already set above based on which table user was found in
 
-    // Get merged profile data (with error handling)
-    let mergedUser;
-    try {
-      mergedUser = await getUserWithProfile(user.id);
-    } catch (profileError) {
-      // If profile fetch fails, use basic user data
-      console.warn('⚠️ Could not fetch extended profile, using basic user data:', profileError.message);
-      mergedUser = {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role || 'student',
-        skills: user.skills || [],
-        contact: user.contact || null,
-        // Unified Identity: Include role flags
-        isMentor: user.is_mentor || false,
-        isJudge: user.is_judge || false,
-        isSpeaker: user.is_speaker || false,
-      };
+    // Get merged profile data (with error handling) - only for users table (alumni/mentors)
+    let mergedUser = userData;
+    if (userType === 'alumni') {
+      // For alumni/mentors in users table, try to get extended profile
+      try {
+        mergedUser = await getUserWithProfile(userId);
+      } catch (profileError) {
+        // If profile fetch fails, use basic user data
+        console.warn('⚠️ Could not fetch extended profile, using basic user data:', profileError.message);
+        mergedUser = userData;
+      }
     }
-
-    // Ensure role and unified identity flags are included in user object
-    const userWithRole = {
-      ...mergedUser,
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role || 'student', // Include role from database
-      skills: user.skills || mergedUser.skills || [],
-      // Unified Identity: Include role flags
-      isMentor: user.is_mentor || false,
-      isJudge: user.is_judge || false,
-      isSpeaker: user.is_speaker || false,
-    };
 
     // Generate JWT token
+    // Use userType instead of role (determined by which table user is in)
+    const tokenPayload = {
+      id: userId,
+      email: userData.email,
+      userType: userType // 'student' or 'alumni' (determined by table, not role column)
+    };
+    
+    // Add studentId for students
+    if (userType === 'student') {
+      tokenPayload.studentId = userId;
+      tokenPayload.type = 'student';
+    } else {
+      tokenPayload.userId = userId;
+      // For alumni/mentors, include flags from users table
+      if (mergedUser.isMentor) tokenPayload.isMentor = true;
+      if (mergedUser.isJudge) tokenPayload.isJudge = true;
+      if (mergedUser.isSpeaker) tokenPayload.isSpeaker = true;
+    }
+
     const token = jwt.sign(
-      { userId: user.id, email: user.email, role: user.role || 'student' },
+      tokenPayload,
       JWT_SECRET,
       { expiresIn: '7d' }
     );
 
     return {
-      user: userWithRole,
+      user: mergedUser,
       token,
     };
   } catch (error) {
@@ -810,10 +929,20 @@ const updateUser = async (userId, updateData, file) => {
     }
 
     // Handle role-specific updates
-    const userRole = existingUser.role || 'student';
+    // Determine userType based on which table they're in, not role column
+    let userType = 'alumni'; // Default to alumni if in users table
+    try {
+      const studentRepository = require('../repositories/student.repository');
+      const student = await studentRepository.getStudentByEmail(existingUser.email);
+      if (student) {
+        userType = 'student';
+      }
+    } catch (err) {
+      console.warn('⚠️ Could not check students table:', err.message);
+    }
     
     // For students: update students table with major, year, and coursework
-    if (userRole === 'student' && (major !== undefined || year !== undefined || coursework !== undefined)) {
+    if (userType === 'student' && (major !== undefined || year !== undefined || coursework !== undefined)) {
       const studentRepository = require('../repositories/student.repository');
       const studentUpdateData = {};
       if (major !== undefined) studentUpdateData.major = major?.trim() || null;
@@ -849,7 +978,7 @@ const updateUser = async (userId, updateData, file) => {
     }
     
     // For mentors/alumni: update mentors table with company and expertise
-    if ((userRole === 'mentor' || userRole === 'alumni') && (company !== undefined || expertise !== undefined)) {
+    if ((userType === 'mentor' || userType === 'alumni') && (company !== undefined || expertise !== undefined)) {
       const mentorRepository = require('../repositories/mentor.repository');
       const mentorUpdateData = {};
       if (company !== undefined) mentorUpdateData.company = company;
@@ -957,9 +1086,9 @@ const updateUser = async (userId, updateData, file) => {
       }
       return {
         ...basicUser,
-        isMentor: basicUser.is_mentor || false,
-        isJudge: basicUser.is_judge || false,
-        isSpeaker: basicUser.is_speaker || false,
+        isMentor: basicUser.willing_to_be_mentor || false,
+        isJudge: basicUser.willing_to_be_judge || false,
+        isSpeaker: basicUser.willing_to_be_speaker || false, // Use willing_to_be_speaker column
         skills: basicUser.skills || [],
         // Include the values that were just updated
         // CRITICAL: Name MUST be included if it was updated

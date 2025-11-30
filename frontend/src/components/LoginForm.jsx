@@ -54,13 +54,18 @@ export default function LoginForm({ onLoginSuccess, requiredRole = null, onClose
         throw new Error('No token received from server')
       }
       
+      // Map userType to role for frontend compatibility
+      if (user && !user.role && user.userType) {
+        user.role = user.userType
+      }
+      
       // Store token and user data
       localStorage.setItem('authToken', token)
       localStorage.setItem('user', JSON.stringify(user))
-      console.log('💾 Token and user data stored')
+      console.log('💾 Token and user data stored:', { userType: user.userType, role: user.role })
 
-      // Get user role from response
-      const userRole = user?.role || 'student'
+      // Get user role from response (check userType first, then role, then default)
+      const userRole = user?.userType || user?.role || 'student'
       console.log('👤 User role:', userRole)
       console.log('🔒 Required role for this portal:', requiredRole)
 

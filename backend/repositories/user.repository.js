@@ -16,13 +16,14 @@ const createUser = async (userData) => {
     email,
     name,
     password,
-    role,
+    // role, // REMOVED - users table doesn't have role column (determined by table, not column)
     contact,
     skills,
     willing_to_be_mentor,
     mentor_capacity,
     willing_to_be_judge,
     willing_to_be_sponsor,
+    willing_to_be_speaker, // Separate from willing_to_be_sponsor
     // Unified Identity: Alumni role flags
     isMentor,
     isJudge,
@@ -46,31 +47,45 @@ const createUser = async (userData) => {
     hasParticipantColumn = false;
   }
 
+  // Check if role column exists (for backward compatibility during migration)
+  let hasRoleColumn = false;
+  try {
+    const checkRoleColumn = await pool.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name='users' AND column_name='role'
+    `);
+    hasRoleColumn = checkRoleColumn.rows.length > 0;
+  } catch (checkError) {
+    console.warn('⚠️ Could not check for role column:', checkError.message);
+    hasRoleColumn = false;
+  }
+
+  // Build query - users table has: willing_to_be_mentor, willing_to_be_judge, willing_to_be_sponsor, willing_to_be_speaker
+  // willing_to_be_speaker is separate from willing_to_be_sponsor (sponsoring vs speaking)
   const query = hasParticipantColumn
     ? `
       INSERT INTO ${UserModel.TABLE_NAME} (
-        email, name, password, role, contact, skills,
+        email, name, password, contact, skills,
         willing_to_be_mentor, mentor_capacity,
-        willing_to_be_judge, willing_to_be_sponsor,
-        is_mentor, is_judge, is_speaker, is_participant
+        willing_to_be_judge, willing_to_be_sponsor, willing_to_be_speaker,
+        is_participant
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-      RETURNING id, email, name, role, contact, skills, willing_to_be_mentor,
-                mentor_capacity, willing_to_be_judge, willing_to_be_sponsor,
-                is_mentor, is_judge, is_speaker, is_participant,
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      RETURNING id, email, name, contact, skills, willing_to_be_mentor,
+                mentor_capacity, willing_to_be_judge, willing_to_be_sponsor, willing_to_be_speaker,
+                is_participant,
                 created_at, updated_at
     `
     : `
       INSERT INTO ${UserModel.TABLE_NAME} (
-        email, name, password, role, contact, skills,
+        email, name, password, contact, skills,
         willing_to_be_mentor, mentor_capacity,
-        willing_to_be_judge, willing_to_be_sponsor,
-        is_mentor, is_judge, is_speaker
+        willing_to_be_judge, willing_to_be_sponsor, willing_to_be_speaker
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-      RETURNING id, email, name, role, contact, skills, willing_to_be_mentor,
-                mentor_capacity, willing_to_be_judge, willing_to_be_sponsor,
-                is_mentor, is_judge, is_speaker,
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      RETURNING id, email, name, contact, skills, willing_to_be_mentor,
+                mentor_capacity, willing_to_be_judge, willing_to_be_sponsor, willing_to_be_speaker,
                 created_at, updated_at
     `;
 
@@ -78,17 +93,16 @@ const createUser = async (userData) => {
     email,
     name,
     password, // Already hashed in service layer
-    role || 'student', // Default to student if not provided
+    // NO role field - users table doesn't have role column
     contact || null,
     Array.isArray(skills) ? skills : (skills ? [skills] : []), // Ensure skills is an array
-    willing_to_be_mentor === 'yes' || willing_to_be_mentor === true,
+    // Users table has willing_to_be_* columns, not is_* columns
+    // Convert isMentor/isJudge/isSpeaker to willing_to_be_mentor/willing_to_be_judge/willing_to_be_speaker
+    (isMentor === true || isMentor === 'true' || isMentor === '1' || willing_to_be_mentor === 'yes' || willing_to_be_mentor === true),
     mentor_capacity || null,
-    willing_to_be_judge === 'yes' || willing_to_be_judge === true,
-    willing_to_be_sponsor === 'yes' || willing_to_be_sponsor === true,
-    // Unified Identity: Alumni role flags
-    isMentor || false,
-    isJudge || false,
-    isSpeaker || false,
+    (isJudge === true || isJudge === 'true' || isJudge === '1' || willing_to_be_judge === 'yes' || willing_to_be_judge === true),
+    willing_to_be_sponsor === 'yes' || willing_to_be_sponsor === true || false, // Separate from speaker
+    (isSpeaker === true || isSpeaker === 'true' || isSpeaker === '1' || willing_to_be_speaker === 'yes' || willing_to_be_speaker === true), // willing_to_be_speaker
   ];
 
   const values = hasParticipantColumn
@@ -99,6 +113,13 @@ const createUser = async (userData) => {
     const result = await pool.query(query, values);
     return result.rows[0];
   } catch (error) {
+    // Log the exact query that failed for debugging
+    if (error.message && error.message.includes('does not exist')) {
+      console.error('❌ SQL Error - Column does not exist:');
+      console.error('   Query:', query.substring(0, 200) + '...');
+      console.error('   Error:', error.message);
+      console.error('   Values count:', values.length);
+    }
     // Handle unique constraint violation (duplicate email)
     if (error.code === '23505') {
       const customError = new Error('Email already exists');
@@ -129,23 +150,25 @@ const getUserByEmail = async (email) => {
     hasParticipantColumn = false;
   }
 
-  const query = hasParticipantColumn
-    ? `
-      SELECT id, email, name, password, role, skills, contact, willing_to_be_mentor,
-             mentor_capacity, willing_to_be_judge, willing_to_be_sponsor,
-             is_mentor, is_judge, is_speaker, is_participant,
-             created_at, updated_at
-      FROM ${UserModel.TABLE_NAME}
-      WHERE email = $1
-    `
-    : `
-      SELECT id, email, name, password, role, skills, contact, willing_to_be_mentor,
-             mentor_capacity, willing_to_be_judge, willing_to_be_sponsor,
-             is_mentor, is_judge, is_speaker,
-             created_at, updated_at
-      FROM ${UserModel.TABLE_NAME}
-      WHERE email = $1
-    `;
+  // Build query - NEVER include role column (users table doesn't have role column)
+  // Role column was removed - user type is determined by which table they're in
+      // Users table has: willing_to_be_mentor, willing_to_be_judge, willing_to_be_sponsor, willing_to_be_speaker
+      const query = hasParticipantColumn
+        ? `
+          SELECT id, email, name, password, skills, contact, willing_to_be_mentor,
+                 mentor_capacity, willing_to_be_judge, willing_to_be_sponsor, willing_to_be_speaker,
+                 is_participant,
+                 created_at, updated_at
+          FROM ${UserModel.TABLE_NAME}
+          WHERE email = $1
+        `
+        : `
+          SELECT id, email, name, password, skills, contact, willing_to_be_mentor,
+                 mentor_capacity, willing_to_be_judge, willing_to_be_sponsor, willing_to_be_speaker,
+                 created_at, updated_at
+          FROM ${UserModel.TABLE_NAME}
+          WHERE email = $1
+        `;
 
   try {
     const result = await pool.query(query, [email]);
@@ -179,19 +202,19 @@ const getUserById = async (id) => {
     hasParticipantColumn = false;
   }
 
+  // Build query - Users table has: willing_to_be_mentor, willing_to_be_judge, willing_to_be_sponsor, willing_to_be_speaker
   const query = hasParticipantColumn
     ? `
-      SELECT id, email, name, role, skills, contact, willing_to_be_mentor,
-             mentor_capacity, willing_to_be_judge, willing_to_be_sponsor,
-             is_mentor, is_judge, is_speaker, is_participant,
+      SELECT id, email, name, skills, contact, willing_to_be_mentor,
+             mentor_capacity, willing_to_be_judge, willing_to_be_sponsor, willing_to_be_speaker,
+             is_participant,
              created_at, updated_at
       FROM ${UserModel.TABLE_NAME}
       WHERE id = $1
     `
     : `
-      SELECT id, email, name, role, skills, contact, willing_to_be_mentor,
-             mentor_capacity, willing_to_be_judge, willing_to_be_sponsor,
-             is_mentor, is_judge, is_speaker,
+      SELECT id, email, name, skills, contact, willing_to_be_mentor,
+             mentor_capacity, willing_to_be_judge, willing_to_be_sponsor, willing_to_be_speaker,
              created_at, updated_at
       FROM ${UserModel.TABLE_NAME}
       WHERE id = $1
@@ -224,9 +247,10 @@ const updateUser = async (id, updateData) => {
     mentor_capacity,
     willing_to_be_judge,
     willing_to_be_sponsor,
-    isMentor,
-    isJudge,
-    isSpeaker,
+    willing_to_be_speaker, // Separate from willing_to_be_sponsor
+    isMentor, // Frontend sends this, we convert to willing_to_be_mentor
+    isJudge, // Frontend sends this, we convert to willing_to_be_judge
+    isSpeaker, // Frontend sends this, we convert to willing_to_be_speaker
     isParticipant,
   } = updateData;
 
@@ -280,27 +304,32 @@ const updateUser = async (id, updateData) => {
     values.push(willing_to_be_sponsor === 'yes' || willing_to_be_sponsor === true);
   }
 
-  // Unified Identity flags (already converted to boolean in controller)
+  // Convert isMentor/isJudge to willing_to_be_mentor/willing_to_be_judge
+  // Users table doesn't have is_mentor/is_judge/is_speaker columns
   if (isMentor !== undefined) {
-    updates.push(`is_mentor = $${paramIndex++}`);
+    updates.push(`willing_to_be_mentor = $${paramIndex++}`);
     // Handle both boolean and string values
     const boolValue = typeof isMentor === 'boolean' ? isMentor : (isMentor === 'true' || isMentor === true || isMentor === '1' || isMentor === 'on');
     values.push(boolValue);
   }
 
   if (isJudge !== undefined) {
-    updates.push(`is_judge = $${paramIndex++}`);
+    updates.push(`willing_to_be_judge = $${paramIndex++}`);
     // Handle both boolean and string values
     const boolValue = typeof isJudge === 'boolean' ? isJudge : (isJudge === 'true' || isJudge === true || isJudge === '1' || isJudge === 'on');
     values.push(boolValue);
   }
 
+  // Convert isSpeaker to willing_to_be_speaker
   if (isSpeaker !== undefined) {
-    updates.push(`is_speaker = $${paramIndex++}`);
-    // Handle both boolean and string values
+    updates.push(`willing_to_be_speaker = $${paramIndex++}`);
     const boolValue = typeof isSpeaker === 'boolean' ? isSpeaker : (isSpeaker === 'true' || isSpeaker === true || isSpeaker === '1' || isSpeaker === 'on');
     values.push(boolValue);
+  } else if (willing_to_be_speaker !== undefined) {
+    updates.push(`willing_to_be_speaker = $${paramIndex++}`);
+    values.push(willing_to_be_speaker === 'yes' || willing_to_be_speaker === true);
   }
+  // }
 
   // Admin/Participant flag (only if column exists)
   if (isParticipant !== undefined && hasParticipantColumn) {
@@ -325,10 +354,10 @@ const updateUser = async (id, updateData) => {
   // Build RETURNING clause conditionally
   // Note: bio, linkedinUrl, portfolioUrl, coursework are stored in DynamoDB, not RDS
   // But we return them from the merged user data in the service layer
+  // Users table does NOT have: role, is_mentor, is_judge, is_speaker columns
   const returningFields = [
-    'id', 'email', 'name', 'contact', 'role', 'skills', 'willing_to_be_mentor',
-    'mentor_capacity', 'willing_to_be_judge', 'willing_to_be_sponsor',
-    'is_mentor', 'is_judge', 'is_speaker'
+    'id', 'email', 'name', 'contact', 'skills', 'willing_to_be_mentor',
+    'mentor_capacity', 'willing_to_be_judge', 'willing_to_be_sponsor', 'willing_to_be_speaker'
   ];
   if (hasParticipantColumn) {
     returningFields.push('is_participant');
@@ -402,6 +431,28 @@ const getAllUsers = async () => {
 };
 
 /**
+ * Get all users willing to be mentors
+ * @returns {Promise<Array>} Array of mentor user objects (without passwords)
+ */
+const getMentorUsers = async () => {
+  const query = `
+    SELECT id, email, name, contact, willing_to_be_mentor,
+           mentor_capacity, willing_to_be_judge, willing_to_be_sponsor,
+           created_at, updated_at, last_login
+    FROM ${UserModel.TABLE_NAME}
+    WHERE willing_to_be_mentor = TRUE
+    ORDER BY created_at DESC
+  `;
+
+  try {
+    const result = await pool.query(query);
+    return result.rows;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
  * Delete user by ID
  * @param {number} id - User ID
  * @returns {Promise<boolean>} True if user was deleted, false if not found
@@ -421,13 +472,52 @@ const deleteUser = async (id) => {
   }
 };
 
+/**
+ * Update user's last_login timestamp to current time.
+ * @param {string|number} id - User ID
+ * @returns {Promise<void>}
+ */
+const updateLastLogin = async (id) => {
+  // Check if last_login column exists
+  try {
+    const columnCheck = await pool.query(`
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_name = $1
+          AND column_name = 'last_login'
+      ) AS exists
+    `, [UserModel.TABLE_NAME]);
+
+    const hasLastLoginColumn = !!columnCheck.rows[0]?.exists;
+
+    if (hasLastLoginColumn) {
+      const query = `
+        UPDATE ${UserModel.TABLE_NAME}
+        SET last_login = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+      `;
+      await pool.query(query, [id]);
+    } else {
+      // Column doesn't exist, silently skip (for backward compatibility)
+      console.warn(`⚠️ last_login column does not exist in ${UserModel.TABLE_NAME}. Skipping update.`);
+    }
+  } catch (error) {
+    // If update fails, log but don't throw (for backward compatibility)
+    console.warn('⚠️ Could not update last_login:', error.message);
+  }
+};
+
 module.exports = {
   createUser,
   getUserByEmail,
   getUserById,
   getAllUsers,
+  getMentorUsers,
   updateUser,
   updateUserPassword,
   deleteUser,
+  updateLastLogin,
 };
 

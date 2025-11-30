@@ -22,11 +22,14 @@ export const MockDataProvider = ({ children }) => {
       const userStr = localStorage.getItem('user')
       if (userStr) {
         const user = JSON.parse(userStr)
+        // Map userType to role for frontend compatibility (check userType first, then role, then default)
+        const userRole = user.userType || user.role || "student"
         const parsedUser = {
           id: user.id || user.userId || 101, // Support different ID field names
           name: user.name || "User",
           email: user.email || "",
-          role: user.role || "student",
+          role: userRole,
+          userType: user.userType || userRole, // Ensure both fields exist
           major: user.major || "", // Keep empty string if not set
           year: user.year || "", // Keep empty string if not set
           bio: user.bio || "",
@@ -95,20 +98,26 @@ export const MockDataProvider = ({ children }) => {
   useEffect(() => {
     const handleStorageChange = () => {
       const newUser = getUserFromStorage()
-      setCurrentUser(newUser)
-      console.log('🔄 MockDataContext: Updated currentUser from localStorage:', newUser)
+      // Only update if user data actually changed (compare serialized versions to avoid unnecessary re-renders)
+      setCurrentUser(prevUser => {
+        const prevStr = JSON.stringify(prevUser)
+        const newStr = JSON.stringify(newUser)
+        if (prevStr !== newStr) {
+          console.log('🔄 MockDataContext: Updated currentUser from localStorage:', newUser)
+          return newUser
+        }
+        return prevUser // Return previous to avoid re-render if nothing changed
+      })
     }
 
     // Listen for storage events (when user logs in/out in another tab)
     window.addEventListener('storage', handleStorageChange)
     
-    // Also check on mount and periodically (in case same tab updates localStorage)
+    // Check on mount only (removed periodic checking to prevent constant re-renders)
     handleStorageChange()
-    const interval = setInterval(handleStorageChange, 1000) // Check every second
 
     return () => {
       window.removeEventListener('storage', handleStorageChange)
-      clearInterval(interval)
     }
   }, [])
 

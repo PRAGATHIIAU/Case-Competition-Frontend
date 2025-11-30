@@ -81,22 +81,42 @@ router.post('/:id/rsvp', async (req, res) => {
     }
 
     // Get user details (email and name)
-    // Note: users.id is INTEGER, students.student_id is UUID, so we check users first
-    // If user is a student, they should be in users table with role='student'
-    const userResult = await pool.query(`
-      SELECT email, name FROM users WHERE id = $1
+    // Check both students table and users table (table-based identification, no role column)
+    let user = null;
+    let studentEmail = null;
+    let studentName = null;
+    
+    // First check students table
+    const studentResult = await pool.query(`
+      SELECT email, name FROM students WHERE student_id = $1
     `, [user_id]);
+    
+    if (studentResult.rows.length > 0) {
+      user = studentResult.rows[0];
+      studentEmail = user.email;
+      studentName = user.name || 'Student';
+      console.log('👤 User found in students table');
+    } else {
+      // If not in students table, check users table (alumni/mentors)
+      const userResult = await pool.query(`
+        SELECT email, name FROM users WHERE id = $1
+      `, [user_id]);
+      
+      if (userResult.rows.length > 0) {
+        user = userResult.rows[0];
+        studentEmail = user.email;
+        studentName = user.name || 'User';
+        console.log('👤 User found in users table');
+      }
+    }
 
-    if (userResult.rows.length === 0) {
+    if (!user) {
+      console.error('❌ User not found in students or users table');
       return res.status(404).json({
         success: false,
         error: 'User not found'
       });
     }
-
-    const user = userResult.rows[0];
-    const studentEmail = user.email;
-    const studentName = user.name || 'Student';
     
     console.log('👤 User found:');
     console.log('   ├─ Email:', studentEmail);

@@ -17,7 +17,7 @@ const signup = async (req, res) => {
       email,
       name,
       password,
-      role, // NEW: Role field
+      userType, // Changed from 'role' to 'userType' - determines which table to use
       contact,
       skills, // NEW: Skills field
       willing_to_be_mentor,
@@ -55,40 +55,95 @@ const signup = async (req, res) => {
       return Boolean(value);
     };
 
-    // Prepare user data (will be split in service layer)
-    const userData = {
-      // RDS atomic data + willingness flags + role
-      email: email?.trim(),
-      name: name?.trim(),
-      password,
-      role: role || 'student', // NEW: Include role
-      contact: contact?.trim() || null,
-      // Unified Identity: Alumni role flags (convert string to boolean)
-      isMentor: toBoolean(isMentor),
-      isJudge: toBoolean(isJudge),
-      isSpeaker: toBoolean(isSpeaker),
-      // Admin/Participant flag (convert string to boolean)
-      isParticipant: toBoolean(isParticipant),
-      skills: skills ? (Array.isArray(skills) ? skills : (typeof skills === 'string' ? skills.split(',').map(s => s.trim()) : [skills])) : [],
-      willing_to_be_mentor: willing_to_be_mentor || 'no',
-      mentor_capacity: mentor_capacity ? parseInt(mentor_capacity) : null,
-      willing_to_be_judge: willing_to_be_judge || 'no',
-      willing_to_be_sponsor: willing_to_be_sponsor || 'no',
-      // Role-specific fields
-      major: major?.trim() || undefined,
-      year: year?.trim() || undefined,
-      company: company?.trim() || undefined,
-      expertise: expertise ? (Array.isArray(expertise) ? expertise : (typeof expertise === 'string' ? expertise.split(',').map(e => e.trim()) : [expertise])) : undefined,
-      // DynamoDB profile data
-      aspirations: aspirations?.trim() || undefined,
-      parsed_resume: parsed_resume ? (typeof parsed_resume === 'string' ? JSON.parse(parsed_resume) : parsed_resume) : undefined,
-      projects: projects ? (Array.isArray(projects) ? projects : JSON.parse(projects)) : undefined,
-      experiences: experiences ? (Array.isArray(experiences) ? experiences : JSON.parse(experiences)) : undefined,
-      achievements: achievements ? (Array.isArray(achievements) ? achievements : JSON.parse(achievements)) : undefined,
-    };
+    // Determine which table to use based on userType (not role)
+    // userType can be: 'student' or 'alumni' (or undefined, defaults to student)
+    const userTypeValue = userType || req.body.role || 'student'; // Support legacy 'role' field for backward compatibility
 
-    // Call service to signup user
-    const result = await authService.signup(userData, file);
+    // Route to appropriate service based on table (not role)
+    if (userTypeValue === 'student') {
+      // Use student service for students (inserts into students table)
+      const studentService = require('../services/student.service');
+      
+      const studentData = {
+        email: email?.trim(),
+        name: name?.trim(),
+        password,
+        contact: contact?.trim() || null,
+        major: major?.trim() || undefined,
+        // Convert year string to grad_year (optional - only if year is provided)
+        grad_year: year ? (() => {
+          // Try to parse as number first
+          const yearNum = parseInt(year);
+          if (!isNaN(yearNum) && yearNum >= 1900 && yearNum <= 2100) {
+            return yearNum;
+          }
+          // Otherwise, map year strings to graduation years
+          const currentYear = new Date().getFullYear();
+          const yearMap = {
+            'Freshman': currentYear + 3,
+            'Sophomore': currentYear + 2,
+            'Junior': currentYear + 1,
+            'Senior': currentYear,
+          };
+          return yearMap[year] || undefined; // Return undefined if not in map (optional field)
+        })() : undefined,
+        skills: skills ? (Array.isArray(skills) ? skills : (typeof skills === 'string' ? skills.split(',').map(s => s.trim()) : [skills])) : [],
+        // DynamoDB profile data
+        aspirations: aspirations?.trim() || undefined,
+        parsed_resume: parsed_resume ? (typeof parsed_resume === 'string' ? JSON.parse(parsed_resume) : parsed_resume) : undefined,
+        projects: projects ? (Array.isArray(projects) ? projects : JSON.parse(projects)) : undefined,
+        experiences: experiences ? (Array.isArray(experiences) ? experiences : JSON.parse(experiences)) : undefined,
+        achievements: achievements ? (Array.isArray(achievements) ? achievements : JSON.parse(achievements)) : undefined,
+      };
+
+      const result = await studentService.signup(studentData, file);
+      
+      return res.status(201).json({
+        success: true,
+        message: 'Student registered successfully',
+        data: result,
+      });
+    } else {
+      // All non-students go to users table (alumni/mentors/judges/speakers)
+      // NO role column - use flags (isMentor, isJudge, isSpeaker) instead
+      // Use auth service for alumni/mentors (inserts into users table)
+      // NO role field - users table doesn't have role column
+      const userData = {
+        // RDS atomic data + willingness flags (NO role field)
+        email: email?.trim(),
+        name: name?.trim(),
+        password,
+        contact: contact?.trim() || null,
+        // Unified Identity: Alumni role flags (convert string to boolean)
+        isMentor: toBoolean(isMentor),
+        isJudge: toBoolean(isJudge),
+        isSpeaker: toBoolean(isSpeaker),
+        // Admin/Participant flag (convert string to boolean)
+        isParticipant: toBoolean(isParticipant),
+        skills: skills ? (Array.isArray(skills) ? skills : (typeof skills === 'string' ? skills.split(',').map(s => s.trim()) : [skills])) : [],
+        willing_to_be_mentor: willing_to_be_mentor || 'no',
+        mentor_capacity: mentor_capacity ? parseInt(mentor_capacity) : null,
+        willing_to_be_judge: willing_to_be_judge || 'no',
+        willing_to_be_sponsor: willing_to_be_sponsor || 'no',
+        // Role-specific fields
+        company: company?.trim() || undefined,
+        expertise: expertise ? (Array.isArray(expertise) ? expertise : (typeof expertise === 'string' ? expertise.split(',').map(e => e.trim()) : [expertise])) : undefined,
+        // DynamoDB profile data
+        aspirations: aspirations?.trim() || undefined,
+        parsed_resume: parsed_resume ? (typeof parsed_resume === 'string' ? JSON.parse(parsed_resume) : parsed_resume) : undefined,
+        projects: projects ? (Array.isArray(projects) ? projects : JSON.parse(projects)) : undefined,
+        experiences: experiences ? (Array.isArray(experiences) ? experiences : JSON.parse(experiences)) : undefined,
+        achievements: achievements ? (Array.isArray(achievements) ? achievements : JSON.parse(achievements)) : undefined,
+      };
+
+      const result = await authService.signup(userData, file);
+      
+      return res.status(201).json({
+        success: true,
+        message: 'User registered successfully',
+        data: result,
+      });
+    }
 
     // Return success response
     res.status(201).json({

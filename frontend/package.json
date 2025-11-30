@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "start": "vite",
     "build": "vite build",
     "preview": "vite preview"
   },
@@ -27,4 +28,3 @@
     "vite": "^5.0.8"
   }
 }
-

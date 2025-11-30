@@ -75,7 +75,21 @@ export default function SignupForm({ onSignupSuccess, onClose = null }) {
       if (formData.role === 'student') {
         signupData.major = formData.major
         signupData.year = formData.year
-        signupData.grad_year = formData.year === 'Senior' ? 2025 : formData.year === 'Junior' ? 2026 : 2027
+        // Convert year string to grad_year (optional - only if year is selected)
+        if (formData.year) {
+          const currentYear = new Date().getFullYear();
+          const yearMap = {
+            'Freshman': currentYear + 3,
+            'Sophomore': currentYear + 2,
+            'Junior': currentYear + 1,
+            'Senior': currentYear,
+          };
+          // Only set grad_year if year is a valid option, otherwise leave it undefined (optional)
+          if (yearMap[formData.year]) {
+            signupData.grad_year = yearMap[formData.year];
+          }
+          // If year is not in map, don't send grad_year (it's optional)
+        }
       } else if (formData.role === 'mentor' || formData.role === 'alumni') {
         signupData.company = formData.company
         if (formData.expertise) {
@@ -87,6 +101,10 @@ export default function SignupForm({ onSignupSuccess, onClose = null }) {
           signupData.isJudge = formData.isJudge || false
           signupData.isSpeaker = formData.isSpeaker || false
         }
+      } else if (formData.role === 'faculty') {
+        // Faculty signup - no special flags needed
+        signupData.isParticipant = false
+        console.log('🔐 Faculty signup')
       } else if (formData.role === 'admin') {
         // Admin/Participant flag: If admin is also a participant (student assistant)
         signupData.isParticipant = formData.isParticipant || false
@@ -109,14 +127,19 @@ export default function SignupForm({ onSignupSuccess, onClose = null }) {
       const token = loginResponse.token
       const user = loginResponse.user || loginResponse
       
+      // Map userType to role for frontend compatibility
+      if (user && !user.role && user.userType) {
+        user.role = user.userType
+      }
+      
       if (token) {
         localStorage.setItem('authToken', token)
         localStorage.setItem('user', JSON.stringify(user))
-        console.log('💾 Token and user data stored')
+        console.log('💾 Token and user data stored:', { userType: user.userType, role: user.role })
       }
       
-      // Redirect based on role
-      const userRole = user?.role || formData.role
+      // Redirect based on role (check userType first, then role, then formData.role)
+      const userRole = user?.userType || user?.role || formData.role
       let redirectPath = '/'
       
       switch (userRole.toLowerCase()) {
