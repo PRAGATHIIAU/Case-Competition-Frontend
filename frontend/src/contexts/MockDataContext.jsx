@@ -4,6 +4,7 @@ import { generateJudgeInvites, sendInvitationEmail } from '../utils/judgeInvitat
 import { sendAcknowledgementEmail, sendSpeakerInvitationEmail, sendMentorInviteEmail } from '../utils/emailService'
 import { checkAndSendFollowUps } from '../utils/followUpEmailScheduler'
 import { processAppreciationEmails } from '../utils/appreciationEmailScheduler'
+import { adminAPI } from '../services/api'
 
 const MockDataContext = createContext()
 
@@ -2268,28 +2269,41 @@ export const MockDataProvider = ({ children }) => {
   // GET: Get system analytics (aggregated data for admin dashboard)
   const getSystemAnalytics = async () => {
     return new Promise((resolve) => {
-      setTimeout(() => {
+      setTimeout(async () => {
         try {
           console.log('📊 GET SYSTEM ANALYTICS - Starting...')
 
+          let backendBasicStats = null
+          try {
+            backendBasicStats = await adminAPI.getBasicStats()
+          } catch (error) {
+            console.warn('⚠️ Failed to fetch backend basic stats, using mock counts', error?.message)
+          }
+
           // 1. User Stats: Count of total Students, Alumni, and Faculty
-          const totalStudents = allStudents.length
-          const totalAlumni = alumni.length
+          const totalStudents = backendBasicStats?.totalStudents ?? allStudents.length
+          const totalAlumni = backendBasicStats?.totalAlumni ?? alumni.length
           const totalFaculty = 1 // Assuming current user is faculty/admin
           
-          // Count active mentors (alumni who have accepted connections)
-          const activeMentors = new Set(
-            connectionRequests
-              .filter(req => req.status === 'accepted' || req.status === 'confirmed')
-              .map(req => req.receiver_id)
-          ).size
+          // Count mentor stats
+          const acceptedRequests = connectionRequests.filter(
+            req => req.status === 'accepted' || req.status === 'confirmed'
+          )
+          const pendingRequestsList = connectionRequests.filter((req) => req.status === 'pending')
+          const rejectedRequestsList = connectionRequests.filter(
+            (req) => req.status === 'declined' || req.status === 'rejected'
+          )
+
+          const activeMentors = new Set(acceptedRequests.map(req => req.receiver_id)).size
+          const totalMentors = mentors.length
+          const inactiveMentors = Math.max(totalMentors - activeMentors, 0)
 
           // 2. Engagement Stats: Count of total MentorshipSessions and Competitions
           const totalMentorshipSessions = connectionRequests.filter(
             req => req.status === 'confirmed' && req.sessionStatus === 'confirmed'
           ).length
           const totalCompetitions = competitions.length
-          const totalEvents = events.length
+          const totalEvents = backendBasicStats?.activeEvents ?? events.length
 
           // 3. Student Feedback: Calculate average rating from EventFeedback
           const studentRatings = eventFeedback.map(fb => fb.rating)
@@ -2322,6 +2336,7 @@ export const MockDataProvider = ({ children }) => {
               totalStudents,
               totalAlumni,
               totalFaculty,
+              totalMentors,
               activeMentors,
               totalUsers: totalStudents + totalAlumni + totalFaculty
             },
@@ -2332,6 +2347,14 @@ export const MockDataProvider = ({ children }) => {
               totalConnections: connectionRequests.filter(
                 req => req.status === 'accepted' || req.status === 'confirmed'
               ).length
+            },
+            mentorEngagement: {
+              totalMentors,
+              activeMentors,
+              inactiveMentors,
+              acceptedRequests: acceptedRequests.length,
+              pendingRequests: pendingRequestsList.length,
+              rejectedRequests: rejectedRequestsList.length,
             },
             feedback: {
               studentAvg: parseFloat(studentAvgRating.toFixed(2)),

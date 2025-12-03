@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { UserPlus, Mail, Lock, User, Loader2, AlertCircle, GraduationCap, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
+import { setAdminParticipantFlag } from '../utils/adminParticipant'
 
 export default function SignupForm({ onSignupSuccess, onClose = null }) {
   const navigate = useNavigate()
@@ -97,9 +98,9 @@ export default function SignupForm({ onSignupSuccess, onClose = null }) {
         }
         // Unified Identity: Add role flags for alumni
         if (formData.role === 'alumni') {
-          signupData.isMentor = formData.isMentor || false
-          signupData.isJudge = formData.isJudge || false
-          signupData.isSpeaker = formData.isSpeaker || false
+          signupData.isMentor = !!formData.isMentor
+          signupData.isJudge = !!formData.isJudge
+          signupData.isSpeaker = !!formData.isSpeaker
         }
       } else if (formData.role === 'faculty') {
         // Faculty signup - no special flags needed
@@ -111,31 +112,114 @@ export default function SignupForm({ onSignupSuccess, onClose = null }) {
         console.log('🔐 Admin signup - isParticipant:', signupData.isParticipant)
       }
       
-      // Call signup API
-      const response = await api.auth.signup(signupData)
-      
-      console.log('✅ Signup successful:', response)
-      
-      // Check if response indicates success
-      if (!response || (response.success === false)) {
-        throw new Error(response?.message || response?.error || 'Signup failed. Please try again.')
+      const isAdminRole = formData.role === 'admin' || formData.role === 'faculty'
+      let token
+      let user
+
+      let participantFlag = false
+
+      if (isAdminRole) {
+        const nameParts = formData.name.trim().split(/\s+/)
+        const firstName = nameParts.shift() || 'Admin'
+        const lastName = nameParts.length ? nameParts.join(' ') : 'User'
+
+        participantFlag = !!formData.isParticipant
+
+        const adminResponse = await api.admin.signup({
+          email: formData.email,
+          password: formData.password,
+          firstName,
+          lastName,
+          role: formData.role,
+          isParticipant: participantFlag,
+        })
+
+        const payload = adminResponse?.data || adminResponse
+        token = payload?.token
+        user = payload?.admin || null
+
+        if (!token || !user) {
+          throw new Error('Failed to create admin account. Please try again.')
+        }
+
+        if (user && !user.role) {
+          user.role = formData.role
+        }
+        user.userType = user.userType || user.role
+
+        setAdminParticipantFlag(user.email, participantFlag)
+        if (participantFlag) {
+          user.isParticipant = true
+        }
+      } else {
+        // Call signup API for students/alumni
+        const response = await api.auth.signup(signupData)
+        
+        console.log('✅ Signup successful:', response)
+        
+        // Check if response indicates success
+        if (!response || (response.success === false)) {
+          throw new Error(response?.message || response?.error || 'Signup failed. Please try again.')
+        }
+        
+        // Auto-login after signup
+        const loginResponse = await api.auth.login(formData.email, formData.password)
+        
+        token = loginResponse.token
+        user = loginResponse.user || loginResponse
+        
+        // Map userType to role for frontend compatibility
+        if (user && !user.role && user.userType) {
+          user.role = user.userType
+        }
+
+        // Clear any previous participant flag if this account is not admin/faculty
+        setAdminParticipantFlag(formData.email, false)
       }
       
-      // Auto-login after signup
-      const loginResponse = await api.auth.login(formData.email, formData.password)
-      
-      const token = loginResponse.token
-      const user = loginResponse.user || loginResponse
-      
-      // Map userType to role for frontend compatibility
-      if (user && !user.role && user.userType) {
-        user.role = user.userType
-      }
-      
-      if (token) {
+      if (token && user) {
+        const normalizeBool = (value) => {
+          if (value === undefined || value === null) return false
+          if (typeof value === 'string') {
+            return ['true', 'yes', '1'].includes(value.trim().toLowerCase())
+          }
+          return Boolean(value)
+        }
+
+        user.role = user.role || formData.role
+        user.userType = user.userType || user.role || formData.role
+
+        let derivedIsMentor =
+          normalizeBool(user.isMentor) ||
+          normalizeBool(user.is_mentor) ||
+          normalizeBool(user.willing_to_be_mentor)
+        let derivedIsJudge =
+          normalizeBool(user.isJudge) ||
+          normalizeBool(user.is_judge) ||
+          normalizeBool(user.willing_to_be_judge)
+        let derivedIsSpeaker =
+          normalizeBool(user.isSpeaker) ||
+          normalizeBool(user.is_speaker) ||
+          normalizeBool(user.willing_to_be_speaker)
+
+        const roleLower = (user.role || '').toLowerCase()
+        if (!derivedIsMentor && !derivedIsJudge && !derivedIsSpeaker && roleLower === 'alumni') {
+          derivedIsMentor = true
+        }
+
+        user.isMentor = derivedIsMentor
+        user.isJudge = derivedIsJudge
+        user.isSpeaker = derivedIsSpeaker
+
         localStorage.setItem('authToken', token)
         localStorage.setItem('user', JSON.stringify(user))
-        console.log('💾 Token and user data stored:', { userType: user.userType, role: user.role })
+        console.log('💾 Token and user data stored:', {
+          userType: user.userType,
+          role: user.role,
+          isMentor: user.isMentor,
+          isJudge: user.isJudge,
+          isSpeaker: user.isSpeaker,
+        })
       }
       
       // Redirect based on role (check userType first, then role, then formData.role)

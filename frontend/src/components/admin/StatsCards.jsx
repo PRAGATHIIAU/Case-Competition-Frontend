@@ -4,8 +4,10 @@ import { Users, GraduationCap, Heart, Calendar } from 'lucide-react'
 export default function StatsCards({ stats }) {
   const cards = [
     {
-      title: 'Active Students',
-      value: stats?.activeStudents || 0,
+      title: 'Student Engagement %',
+      value: stats?.studentEngagementPercent != null
+        ? `${stats.studentEngagementPercent}%`
+        : '—',
       icon: Users,
       color: 'bg-blue-500',
       change: '+12%',

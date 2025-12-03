@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { 
   Users, 
   UserCheck, 
+  GraduationCap,
   Calendar, 
   Star,
   TrendingUp,
@@ -25,11 +26,36 @@ import {
 } from 'recharts'
 import { useMockData } from '../../contexts/MockDataContext'
 import Toast from '../common/Toast'
+import api from '../../services/api'
 
 const COLORS = ['#500000', '#8B0000', '#A0522D', '#CD853F', '#D2691E']
 
 export default function AdminAnalyticsDashboard() {
   const { getSystemAnalytics, competitions } = useMockData()
+  const CustomMentorTooltip = ({ active, payload, label }) => {
+    if (!active || !payload || payload.length === 0) return null
+
+    const nonZero = payload.filter((entry) => Number(entry.value) > 0)
+    if (nonZero.length === 0) return null
+
+    return (
+      <div className="bg-white border border-gray-200 shadow-lg rounded-lg p-3 text-sm">
+        <p className="font-semibold text-gray-800 mb-2">{label}</p>
+        {nonZero.map((entry) => (
+          <div key={entry.name} className="flex items-center justify-between gap-4">
+            <span className="flex items-center gap-2 text-gray-600">
+              <span
+                className="inline-block w-2.5 h-2.5 rounded-full"
+                style={{ backgroundColor: entry.color || entry.fill }}
+              />
+              {entry.name}
+            </span>
+            <span className="font-medium text-gray-900">{entry.value}</span>
+          </div>
+        ))}
+      </div>
+    )
+  }
   const [analytics, setAnalytics] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -44,12 +70,49 @@ export default function AdminAnalyticsDashboard() {
     setLoading(true)
     setError(null)
     try {
-      const result = await getSystemAnalytics()
-      if (result.success) {
-        setAnalytics(result.analytics)
+      const [systemResult, mentorEngagementResult] = await Promise.allSettled([
+        getSystemAnalytics(),
+        api.admin.getMentorEngagement(),
+      ])
+
+      if (systemResult.status === 'fulfilled' && systemResult.value?.success) {
+        const baseAnalytics = systemResult.value.analytics || {}
+        const mentorData = mentorEngagementResult.status === 'fulfilled' ? mentorEngagementResult.value : null
+
+        const nextAnalytics = mentorData
+          ? {
+              ...baseAnalytics,
+              users: {
+                ...(baseAnalytics.users || {}),
+                totalMentors:
+                  mentorData.totalMentors ??
+                  baseAnalytics.users?.totalMentors ??
+                  0,
+                activeMentors:
+                  mentorData.activeMentors ??
+                  baseAnalytics.users?.activeMentors ??
+                  0,
+                inactiveMentors:
+                  mentorData.inactiveMentors ??
+                  baseAnalytics.users?.inactiveMentors ??
+                  0,
+              },
+              mentorEngagement: mentorData,
+            }
+          : baseAnalytics
+
+        if (mentorEngagementResult.status === 'rejected') {
+          console.warn('⚠️ Failed to load mentor engagement analytics:', mentorEngagementResult.reason)
+        }
+
+        setAnalytics(nextAnalytics)
       } else {
-        setError(result.message || 'Failed to load analytics')
-        setToastMessage(result.message || 'Failed to load analytics')
+        const message =
+          systemResult.status === 'fulfilled'
+            ? systemResult.value?.message || 'Failed to load analytics'
+            : systemResult.reason?.message || 'Failed to load analytics'
+        setError(message)
+        setToastMessage(message)
         setShowToast(true)
       }
     } catch (err) {
@@ -62,6 +125,48 @@ export default function AdminAnalyticsDashboard() {
   }
 
   // Prepare data for charts
+  const mentorStats = analytics
+    ? analytics.mentorEngagement || {
+        totalMentors: analytics.users?.totalMentors ?? 0,
+        activeMentors: analytics.users?.activeMentors ?? 0,
+        inactiveMentors: Math.max(
+          (analytics.users?.totalMentors ?? 0) - (analytics.users?.activeMentors ?? 0),
+          0
+        ),
+        acceptedRequests: analytics.engagement?.totalConnections ?? 0,
+        pendingRequests: 0,
+        rejectedRequests: 0,
+      }
+    : {
+        totalMentors: 0,
+        activeMentors: 0,
+        inactiveMentors: 0,
+        acceptedRequests: 0,
+        pendingRequests: 0,
+        rejectedRequests: 0,
+      }
+
+  const mentorshipChartData = [
+    {
+      category: 'Mentors',
+      activeMentors: mentorStats.activeMentors ?? 0,
+      inactiveMentors:
+        mentorStats.inactiveMentors ??
+        Math.max((mentorStats.totalMentors ?? 0) - (mentorStats.activeMentors ?? 0), 0),
+      acceptedRequests: 0,
+      pendingRequests: 0,
+      rejectedRequests: 0,
+    },
+    {
+      category: 'Mentorship Requests',
+      activeMentors: 0,
+      inactiveMentors: 0,
+      acceptedRequests: mentorStats.acceptedRequests ?? 0,
+      pendingRequests: mentorStats.pendingRequests ?? 0,
+      rejectedRequests: mentorStats.rejectedRequests ?? 0,
+    },
+  ]
+
   const feedbackChartData = analytics ? [
     {
       name: 'Student Satisfaction',
@@ -156,7 +261,7 @@ export default function AdminAnalyticsDashboard() {
       </div>
 
       {/* SECTION 1: At a Glance Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -183,9 +288,9 @@ export default function AdminAnalyticsDashboard() {
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 mb-1">Active Mentors</p>
+              <p className="text-sm text-gray-600 mb-1">Total Mentors</p>
               <p className="text-3xl font-bold text-gray-800">
-                {analytics?.users.activeMentors || 0}
+                {mentorStats.totalMentors ?? analytics?.users.activeMentors ?? 0}
               </p>
             </div>
             <div className="p-3 bg-green-100 rounded-lg">
@@ -198,6 +303,25 @@ export default function AdminAnalyticsDashboard() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
+          className="bg-white rounded-lg shadow-md p-6"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Total Alumni</p>
+              <p className="text-3xl font-bold text-gray-800">
+                {analytics?.users.totalAlumni || 0}
+              </p>
+            </div>
+            <div className="p-3 bg-red-100 rounded-lg">
+              <GraduationCap className="w-6 h-6 text-red-600" />
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
           className="bg-white rounded-lg shadow-md p-6"
         >
           <div className="flex items-center justify-between">
@@ -216,7 +340,7 @@ export default function AdminAnalyticsDashboard() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
+          transition={{ delay: 0.4 }}
           className="bg-white rounded-lg shadow-md p-6"
         >
           <div className="flex items-center justify-between">
@@ -245,50 +369,65 @@ export default function AdminAnalyticsDashboard() {
         </motion.div>
       </div>
 
-      {/* SECTION 2: Feedback Overview Charts */}
+      {/* SECTION 2: Mentor engagement and User Types */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Bar Chart: Student vs Employer Satisfaction */}
+        {/* Mentor engagement chart */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
+          transition={{ delay: 0.35 }}
           className="bg-white rounded-lg shadow-md p-6"
         >
           <div className="flex items-center gap-2 mb-4">
             <BarChart3 className="w-5 h-5 text-tamu-maroon" />
-            <h3 className="text-xl font-semibold text-gray-800">Feedback Overview</h3>
+            <h3 className="text-xl font-semibold text-gray-800">Mentor Engagement Overview</h3>
           </div>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={feedbackChartData}>
+          <ResponsiveContainer width="100%" height={320}>
+            <BarChart data={mentorshipChartData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis domain={[0, 5]} />
-              <Tooltip />
+              <XAxis dataKey="category" />
+              <YAxis allowDecimals={false} />
+              <Tooltip content={<CustomMentorTooltip />} />
               <Legend />
-              <Bar dataKey="rating" fill="#500000" name="Average Rating" />
+              <Bar
+                dataKey="activeMentors"
+                stackId="mentors"
+                fill="#7f1d1d"
+                name="Active Mentors"
+              />
+              <Bar
+                dataKey="inactiveMentors"
+                stackId="mentors"
+                fill="#fecdd3"
+                name="Inactive Mentors"
+              />
+              <Bar
+                dataKey="acceptedRequests"
+                stackId="requests"
+                fill="#500000"
+                name="Accepted Requests"
+              />
+              <Bar
+                dataKey="pendingRequests"
+                stackId="requests"
+                fill="#991b1b"
+                name="Pending Requests"
+              />
+              <Bar
+                dataKey="rejectedRequests"
+                stackId="requests"
+                fill="#f87171"
+                name="Rejected Requests"
+              />
             </BarChart>
           </ResponsiveContainer>
-          <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
-            <div className="text-center">
-              <p className="text-gray-600">Student Feedback</p>
-              <p className="text-lg font-semibold text-gray-800">
-                {analytics?.feedback.studentCount || 0} responses
-              </p>
-            </div>
-            <div className="text-center">
-              <p className="text-gray-600">Employer Feedback</p>
-              <p className="text-lg font-semibold text-gray-800">
-                {analytics?.feedback.employerCount || 0} responses
-              </p>
-            </div>
-          </div>
         </motion.div>
 
         {/* Pie Chart: User Types */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
+          transition={{ delay: 0.4 }}
           className="bg-white rounded-lg shadow-md p-6"
         >
           <div className="flex items-center gap-2 mb-4">
@@ -331,6 +470,43 @@ export default function AdminAnalyticsDashboard() {
           </div>
         </motion.div>
       </div>
+
+      {/* SECTION 3: Feedback Overview */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.45 }}
+        className="bg-white rounded-lg shadow-md p-6"
+      >
+        <div className="flex items-center gap-2 mb-4">
+          <BarChart3 className="w-5 h-5 text-tamu-maroon" />
+          <h3 className="text-xl font-semibold text-gray-800">Feedback Overview</h3>
+        </div>
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={feedbackChartData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="name" />
+            <YAxis domain={[0, 5]} />
+            <Tooltip />
+            <Legend />
+            <Bar dataKey="rating" fill="#500000" name="Average Rating" />
+          </BarChart>
+        </ResponsiveContainer>
+        <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
+          <div className="text-center">
+            <p className="text-gray-600">Student Feedback</p>
+            <p className="text-lg font-semibold text-gray-800">
+              {analytics?.feedback.studentCount || 0} responses
+            </p>
+          </div>
+          <div className="text-center">
+            <p className="text-gray-600">Employer Feedback</p>
+            <p className="text-lg font-semibold text-gray-800">
+              {analytics?.feedback.employerCount || 0} responses
+            </p>
+          </div>
+        </div>
+      </motion.div>
 
       {/* SECTION 3: Recent Feedback List */}
       <motion.div

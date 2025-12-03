@@ -16,7 +16,7 @@ import SearchInput from './common/SearchInput'
 import { mockAdminStats, mockEngagementData, mockIndustryInterest } from '../data/mockData'
 import { checkEngagementLevel } from '../utils/businessLogic'
 import { hasPermission, isStudentAssistant, getAccessLevelDescription, PERMISSIONS } from '../utils/permissions'
-import api from '../services/api'
+import { adminAPI, pythonAPI } from '../services/api'
 import JudgeCommentsView from './admin/JudgeCommentsView'
 import CompetitionScoresView from './admin/CompetitionScoresView'
 import JudgeFeedbackView from './admin/JudgeFeedbackView'
@@ -51,22 +51,56 @@ export default function AdminDashboard() {
     setLoading(true)
     try {
       // Fetch dashboard stats from Python backend
-      const statsResponse = await api.python.fetchDashboardStats()
+      const pythonStats = await pythonAPI.fetchDashboardStats().catch((err) => {
+        console.warn('⚠️ Python dashboard stats failed, continuing with backend data', err?.message)
+        return null
+      })
+      const [basicStats, studentEngagement, alumniEngagement] = await Promise.allSettled([
+        adminAPI.getBasicStats(),
+        adminAPI.getStudentEngagement(),
+        adminAPI.getAlumniEngagement(),
+      ])
       
-      if (statsResponse.success && statsResponse.data) {
-        // Map Python backend response to frontend format
-        setStats({
-          activeStudents: statsResponse.data.activeStudents || 0,
-          alumniEngagement: statsResponse.data.alumniEngagement || 0,
-          partnerNPS: statsResponse.data.partnerNPS || 0,
-          activeEvents: statsResponse.data.activeEvents || 0,
-        })
-      } else {
-        // Fallback to mock data if API fails
-        console.warn('Failed to fetch stats from Python backend, using mock data')
-        setStats(mockAdminStats)
-      }
-      
+      const resolvedBasic = basicStats.status === 'fulfilled' ? basicStats.value : null
+      const resolvedStudentEngagement = studentEngagement.status === 'fulfilled' ? studentEngagement.value : null
+      const resolvedAlumniEngagement = alumniEngagement.status === 'fulfilled' ? alumniEngagement.value : null
+      const pythonData = pythonStats?.success && pythonStats?.data ? pythonStats.data : null
+
+      const activeStudentsValue =
+        resolvedStudentEngagement?.activeStudents ??
+        pythonData?.activeStudents ??
+        mockAdminStats.activeStudents
+
+      const inactiveStudentsValue =
+        resolvedStudentEngagement?.inactiveStudents ??
+        pythonData?.inactiveStudents ??
+        mockAdminStats.inactiveStudents ??
+        0
+
+      const totalTrackedStudents = activeStudentsValue + inactiveStudentsValue
+      const studentEngagementPercent =
+        totalTrackedStudents > 0
+          ? Math.round((activeStudentsValue / totalTrackedStudents) * 100)
+          : pythonData?.studentEngagementPercent ??
+            mockAdminStats.studentEngagementPercent ??
+            null
+
+      setStats({
+        activeStudents: activeStudentsValue,
+        inactiveStudents: inactiveStudentsValue,
+        studentEngagementPercent,
+        alumniEngagement: resolvedAlumniEngagement?.activeAlumni
+          ?? pythonData?.alumniEngagement
+          ?? mockAdminStats.alumniEngagement,
+        partnerNPS: pythonData?.partnerNPS ?? mockAdminStats.partnerNPS,
+        activeEvents: resolvedBasic?.activeEvents
+          ?? pythonData?.activeEvents
+          ?? mockAdminStats.activeEvents,
+        totalStudents: resolvedBasic?.totalStudents ?? mockAdminStats.activeStudents,
+        totalAlumni: resolvedBasic?.totalAlumni ?? mockAdminStats.activeStudents,
+        inactiveAlumniCount: resolvedBasic?.inactiveAlumniCount ?? mockAdminStats.activeStudents,
+      })
+
       // Check for low engagement - Trigger when dashboard opens
       const warning = checkEngagementLevel(mockEngagementData)
       setEngagementWarning(warning)

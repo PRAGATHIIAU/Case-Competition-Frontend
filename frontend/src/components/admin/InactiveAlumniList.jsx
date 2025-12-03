@@ -19,6 +19,7 @@ import api from '../../services/api'
 export default function InactiveAlumniList() {
   const { getInactiveAlumni, sendReEngagementEmail } = useMockData()
   const [inactiveAlumni, setInactiveAlumni] = useState([])
+  const [totalInactiveAlumni, setTotalInactiveAlumni] = useState(0)
   const [loading, setLoading] = useState(true)
   const [sendingEmail, setSendingEmail] = useState(null) // Track which alumni email is being sent
   const [error, setError] = useState(null)
@@ -34,47 +35,102 @@ export default function InactiveAlumniList() {
     loadInactiveAlumni()
   }, [])
 
+  const calculateMonthsInactive = (lastActiveAt) => {
+    if (!lastActiveAt) return 6
+    const parsedDate = new Date(lastActiveAt)
+    if (Number.isNaN(parsedDate.getTime())) return 6
+
+    const diffMs = Date.now() - parsedDate.getTime()
+    const months = diffMs / (1000 * 60 * 60 * 24 * 30)
+    return Math.max(1, Math.round(months))
+  }
+
+  const normalizeAlumniRecords = (records = []) =>
+    records.map((record, index) => {
+      const lastActiveAt =
+        record.lastActiveAt ||
+        record.lastLogin ||
+        record.last_active_at ||
+        record.lastSeen ||
+        record.last_seen ||
+        null
+
+      const monthsInactive =
+        record.monthsInactive !== undefined
+          ? record.monthsInactive
+          : calculateMonthsInactive(lastActiveAt)
+
+      return {
+        ...record,
+        id: record.id || record.alumni_id || record.email || `alumni-${index}`,
+        name: record.name || record.fullName || record.email || 'Unknown Alumni',
+        email: record.email || record.contactEmail || 'N/A',
+        company: record.company || record.organization || record.employer || '—',
+        industry: record.industry || record.sector || 'General',
+        title: record.title || record.role || '',
+        lastActiveAt,
+        monthsInactive,
+      }
+    })
+
   const loadInactiveAlumni = async () => {
     setLoading(true)
     setError(null)
+
+    let pythonFallback = null
+    let mockFallback = null
+
     try {
-      // Try Python backend first
-      const response = await api.python.fetchInactiveAlumni()
-      
-      if (response.success && response.data) {
-        setInactiveAlumni(response.data)
+      const [inactiveResult, basicStatsResult] = await Promise.allSettled([
+        api.admin.getInactiveAlumni(),
+        api.admin.getBasicStats(),
+      ])
+
+      let normalizedRecords = []
+
+      if (inactiveResult.status === 'fulfilled' && Array.isArray(inactiveResult.value)) {
+        normalizedRecords = normalizeAlumniRecords(inactiveResult.value)
       } else {
-        // Fallback to mock data
-        console.warn('Python backend not available, using mock data')
-        const result = await getInactiveAlumni()
-        if (result.success) {
-          setInactiveAlumni(result.inactiveAlumni)
+        const pythonResponse = await api.python.fetchInactiveAlumni()
+        pythonFallback = pythonResponse
+
+        if (pythonResponse?.success && Array.isArray(pythonResponse.data)) {
+          normalizedRecords = normalizeAlumniRecords(pythonResponse.data)
         } else {
-          setError(result.message || 'Failed to load inactive alumni')
-          setToastMessage(result.message || 'Failed to load inactive alumni')
-          setToastType('error')
-          setShowToast(true)
+          console.warn('Python backend not available, using mock data')
+          const result = await getInactiveAlumni()
+          mockFallback = result
+
+          if (result.success && Array.isArray(result.inactiveAlumni)) {
+            normalizedRecords = normalizeAlumniRecords(result.inactiveAlumni)
+          } else {
+            const message = result.message || 'Failed to load inactive alumni'
+            throw new Error(message)
+          }
         }
+      }
+
+      setInactiveAlumni(normalizedRecords)
+
+      if (basicStatsResult.status === 'fulfilled' && typeof basicStatsResult.value?.inactiveAlumniCount === 'number') {
+        setTotalInactiveAlumni(basicStatsResult.value.inactiveAlumniCount)
+      } else if (inactiveResult.status === 'fulfilled' && Array.isArray(inactiveResult.value)) {
+        setTotalInactiveAlumni(inactiveResult.value.length)
+      } else if (pythonFallback?.success && Array.isArray(pythonFallback.data)) {
+        setTotalInactiveAlumni(pythonFallback.data.length)
+      } else if (mockFallback?.success && Array.isArray(mockFallback.inactiveAlumni)) {
+        setTotalInactiveAlumni(mockFallback.inactiveAlumni.length)
+      } else {
+        setTotalInactiveAlumni(normalizedRecords.length)
       }
     } catch (err) {
       console.error('Error loading inactive alumni:', err)
-      // Fallback to mock data on error
-      try {
-        const result = await getInactiveAlumni()
-        if (result.success) {
-          setInactiveAlumni(result.inactiveAlumni)
-        } else {
-          setError(err.message || 'Failed to load inactive alumni')
-          setToastMessage(err.message || 'Failed to load inactive alumni')
-          setToastType('error')
-          setShowToast(true)
-        }
-      } catch (fallbackErr) {
-        setError(err.message || 'Failed to load inactive alumni')
-        setToastMessage(err.message || 'Failed to load inactive alumni')
-        setToastType('error')
-        setShowToast(true)
-      }
+      setInactiveAlumni([])
+      setTotalInactiveAlumni(0)
+      setError(err.message || 'Failed to load inactive alumni')
+      setToastMessage(err.message || 'Failed to load inactive alumni')
+      setToastType('error')
+      setShowToast(true)
     } finally {
       setLoading(false)
     }
@@ -204,7 +260,9 @@ export default function InactiveAlumniList() {
           </div>
           <div>
             <p className="text-sm text-gray-600">Total Inactive Alumni</p>
-            <p className="text-3xl font-bold text-gray-800">{inactiveAlumni.length}</p>
+            <p className="text-3xl font-bold text-gray-800">
+              {typeof totalInactiveAlumni === 'number' ? totalInactiveAlumni : inactiveAlumni.length}
+            </p>
             <p className="text-xs text-gray-500 mt-1">Last active more than 6 months ago</p>
           </div>
         </div>

@@ -3,8 +3,9 @@ import { motion } from 'framer-motion'
 import { LogIn, Mail, Lock, Loader2, AlertCircle, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
+import { getAdminParticipantFlag } from '../utils/adminParticipant'
 
-export default function LoginForm({ onLoginSuccess, requiredRole = null, onClose = null }) {
+export default function LoginForm({ onLoginSuccess, onClose = null, loginContext = 'general' }) {
   const navigate = useNavigate()
   const [formData, setFormData] = useState({
     email: '',
@@ -13,7 +14,7 @@ export default function LoginForm({ onLoginSuccess, requiredRole = null, onClose
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // Reset form when requiredRole changes (user clicked different portal)
+  // Reset form when the login context changes (user clicked different portal)
   useEffect(() => {
     setFormData({
       email: '',
@@ -21,7 +22,7 @@ export default function LoginForm({ onLoginSuccess, requiredRole = null, onClose
     })
     setError('')
     setIsLoading(false)
-  }, [requiredRole])
+  }, [loginContext])
 
   const handleChange = (e) => {
     setFormData(prev => ({
@@ -38,70 +39,122 @@ export default function LoginForm({ onLoginSuccess, requiredRole = null, onClose
     setIsLoading(true)
 
     try {
-      console.log('🔐 Attempting login...', { email: formData.email })
+      console.log('🔐 Attempting login...', { email: formData.email, context: loginContext })
       
-      // Call login API
-      const loginResponse = await api.auth.login(formData.email, formData.password)
+      const adminContexts = ['admin', 'faculty']
+      const normalizedContext = typeof loginContext === 'string' ? loginContext.toLowerCase() : 'general'
+      const shouldUseAdminApi = adminContexts.includes(normalizedContext)
+      
+      // Call login API (admin/faculty portals use Case-Competition backend)
+      const loginResponse = shouldUseAdminApi
+        ? await api.admin.login(formData.email, formData.password)
+        : await api.auth.login(formData.email, formData.password)
       
       console.log('✅ Login API response:', loginResponse)
       
-      // Extract token and user from response
-      // Response structure: { token: "...", user: { id, email, name, role, ... } }
-      const token = loginResponse.token
-      const user = loginResponse.user || loginResponse
+      // Extract token and user/admin payload
+      const token = loginResponse?.token
+      const rawUser = loginResponse?.user || loginResponse?.admin || loginResponse
+      const user = rawUser ? { ...rawUser } : null
       
       if (!token) {
         throw new Error('No token received from server')
+      }
+      
+      if (!user) {
+        throw new Error('No user data returned from server')
+      }
+
+      const adminParticipantFlag = getAdminParticipantFlag(user.email)
+      if (adminParticipantFlag === true) {
+        user.isParticipant = true
+        user.userType = user.userType || user.role || 'admin'
       }
       
       // Map userType to role for frontend compatibility
       if (user && !user.role && user.userType) {
         user.role = user.userType
       }
+      if (user && !user.userType && user.role) {
+        user.userType = user.role
+      }
       
-      // Store token and user data
-      localStorage.setItem('authToken', token)
-      localStorage.setItem('user', JSON.stringify(user))
-      console.log('💾 Token and user data stored:', { userType: user.userType, role: user.role })
+      const normalizeBool = (value) => {
+        if (value === undefined || value === null) return false
+        if (typeof value === 'string') {
+          return ['true', 'yes', '1'].includes(value.trim().toLowerCase())
+        }
+        return Boolean(value)
+      }
 
       // Get user role from response (check userType first, then role, then default)
-      const userRole = user?.userType || user?.role || 'student'
-      console.log('👤 User role:', userRole)
-      console.log('🔒 Required role for this portal:', requiredRole)
+      let userRole = user?.userType || user?.role || 'student'
+      const alumniSignals =
+        !!user?.isMentor ||
+        !!user?.isJudge ||
+        !!user?.isSpeaker ||
+        (typeof user?.willing_to_be_mentor === 'string' && user.willing_to_be_mentor.toLowerCase() === 'yes') ||
+        (typeof user?.willing_to_be_judge === 'string' && user.willing_to_be_judge.toLowerCase() === 'yes')
 
-      // Validate role if required (user clicked on specific portal)
-      // SPECIAL CASE 1: Faculty and Admin share the same login - allow both roles
-      // SPECIAL CASE 2: If user is 'alumni' with unified identity flags, allow access to any industry partner portal
-      if (requiredRole) {
-        const allowedRoles = Array.isArray(requiredRole) ? requiredRole : [requiredRole]
-        
-        // Faculty and Admin can access each other's portals (shared login)
-        // If portal accepts either faculty OR admin, then both roles should be allowed
-        const portalAcceptsFacultyOrAdmin = allowedRoles.includes('faculty') || allowedRoles.includes('admin')
-        const isFacultyOrAdmin = (userRole === 'faculty' || userRole === 'admin')
-        const canAccessFacultyAdminHub = portalAcceptsFacultyOrAdmin && isFacultyOrAdmin
-        
-        // Check if user role matches OR if alumni has any of the unified identity flags
-        const isAlumniWithFlags = userRole === 'alumni' && (user.isMentor || user.isJudge || user.isSpeaker)
-        const roleMatches = allowedRoles.includes(userRole) || 
-          canAccessFacultyAdminHub ||
-          (isAlumniWithFlags && allowedRoles.some(role => 
-            role === 'mentor' || role === 'judge' || role === 'alumni' || role === 'guest_speaker'
-          ))
-        
-        if (!roleMatches) {
-          // Wrong role for this portal - login succeeded but role doesn't match
-          let roleName = Array.isArray(requiredRole) ? requiredRole.join(' or ') : requiredRole
-          // Make error message more user-friendly
-          if (Array.isArray(requiredRole) && requiredRole.includes('faculty') && requiredRole.includes('admin')) {
-            roleName = 'Faculty or Admin'
-          }
-          // Clear the stored credentials since login succeeded but role is wrong
-          localStorage.removeItem('authToken')
-          localStorage.removeItem('user')
-          throw new Error(`These login credentials do not exist for ${roleName}. The account you entered is registered as ${userRole}. Please login with ${roleName} credentials or use the appropriate portal.`)
-        }
+      if ((userRole?.toLowerCase() === 'student' || !userRole) && alumniSignals) {
+        userRole = 'alumni'
       }
+
+      console.log('👤 User role:', userRole)
+
+      const normalizedRole = (userRole || '').toLowerCase()
+      const contextRoleMap = {
+        student: ['student'],
+        alumni: ['alumni', 'mentor', 'judge', 'guest_speaker'],
+        admin: ['admin', 'faculty'],
+        faculty: ['faculty', 'admin'],
+      }
+      const allowedRoles =
+        loginContext?.toLowerCase?.() === 'alumni'
+          ? null
+          : contextRoleMap[loginContext?.toLowerCase?.()] || null
+      if (allowedRoles && !allowedRoles.includes(normalizedRole)) {
+        localStorage.removeItem('authToken')
+        localStorage.removeItem('user')
+        const contextLabel = loginContext === 'alumni'
+          ? 'Alumni/Industry'
+          : loginContext?.charAt(0)?.toUpperCase() + loginContext?.slice(1) || 'selected'
+        throw new Error(
+          `These credentials are registered as "${userRole}". Please login through the ${contextLabel} portal with the matching account.`
+        )
+      }
+
+      let derivedIsMentor =
+        normalizeBool(user.isMentor) ||
+        normalizeBool(user.is_mentor) ||
+        normalizeBool(user.willing_to_be_mentor)
+      let derivedIsJudge =
+        normalizeBool(user.isJudge) ||
+        normalizeBool(user.is_judge) ||
+        normalizeBool(user.willing_to_be_judge)
+      let derivedIsSpeaker =
+        normalizeBool(user.isSpeaker) ||
+        normalizeBool(user.is_speaker) ||
+        normalizeBool(user.willing_to_be_speaker)
+
+      if (!derivedIsMentor && !derivedIsJudge && !derivedIsSpeaker && normalizedRole === 'alumni') {
+        derivedIsMentor = true
+      }
+
+      user.isMentor = derivedIsMentor
+      user.isJudge = derivedIsJudge
+      user.isSpeaker = derivedIsSpeaker
+
+      // Store token and user data (after successful validation and normalization)
+      localStorage.setItem('authToken', token)
+      localStorage.setItem('user', JSON.stringify(user))
+      console.log('💾 Token and user data stored:', {
+        userType: user.userType,
+        role: user.role,
+        isMentor: user.isMentor,
+        isJudge: user.isJudge,
+        isSpeaker: user.isSpeaker,
+      })
 
       // Role-based redirect
       // SPECIAL: Faculty and Admin share login - redirect based on their actual role
@@ -183,9 +236,9 @@ export default function LoginForm({ onLoginSuccess, requiredRole = null, onClose
           <LogIn className="w-8 h-8 text-tamu-maroon" />
         </div>
         <h2 className="text-3xl font-bold text-gray-800 mb-2">Login</h2>
-        {requiredRole ? (
-          <p className="text-gray-600">
-            Please login as <span className="font-semibold text-tamu-maroon capitalize">{requiredRole}</span> to continue
+        {loginContext && loginContext !== 'general' ? (
+          <p className="text-gray-600 capitalize">
+            Logging into the <span className="font-semibold text-tamu-maroon">{loginContext}</span> portal
           </p>
         ) : (
           <p className="text-gray-600">Access your dashboard</p>

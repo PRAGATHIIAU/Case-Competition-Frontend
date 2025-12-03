@@ -5,6 +5,10 @@
  */
 
 const API_BASE_URL = '/api';
+const ADMIN_API_BASE_URL =
+  import.meta.env.VITE_ADMIN_API_BASE_URL ||
+  import.meta.env.VITE_BACKEND_URL ||
+  'http://localhost:3000';
 
 // Helper function to get auth token from localStorage
 const getAuthToken = () => {
@@ -93,6 +97,35 @@ const apiRequest = async (endpoint, options = {}) => {
   });
   
   console.log('📡 API Response status:', response.status, response.statusText);
+  
+  return handleResponse(response);
+};
+
+// Helper function for admin endpoints (direct to backend base URL)
+const adminRequest = async (endpoint, options = {}) => {
+  const token = getAuthToken();
+  
+  const headers = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  const url = `${ADMIN_API_BASE_URL}${endpoint}`;
+  console.log('🌐 Admin API Request:', options.method || 'GET', url);
+  if (options.body) {
+    console.log('   └─ Body:', options.body);
+  }
+  
+  const response = await fetch(url, {
+    ...options,
+    headers,
+  });
+  
+  console.log('📡 Admin API Response status:', response.status, response.statusText);
   
   return handleResponse(response);
 };
@@ -397,6 +430,83 @@ export const authAPI = {
 };
 
 /**
+ * Admin API (Case-Competition backend)
+ */
+export const adminAPI = {
+  login: async (email, password) => {
+    const response = await adminRequest('/admin/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+    
+    return response.data ?? response;
+  },
+  signup: async (payload) => {
+    const response = await adminRequest('/admin/signup', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+
+    return response.data ?? response;
+  },
+  getBasicStats: async () => {
+    return adminRequest('/admin/analytics/basic-stats', {
+      method: 'GET',
+    });
+  },
+  getStudentEngagement: async () => {
+    return adminRequest('/admin/analytics/student-engagement', {
+      method: 'GET',
+    });
+  },
+  getAlumniEngagement: async () => {
+    return adminRequest('/admin/analytics/alumni-engagement', {
+      method: 'GET',
+    });
+  },
+  getMentorEngagement: async () => {
+    return adminRequest('/admin/analytics/mentor-engagement', {
+      method: 'GET',
+    });
+  },
+  getAlumniRoles: async () => {
+    return adminRequest('/admin/analytics/alumni-roles', {
+      method: 'GET',
+    });
+  },
+  getEventSummaries: async () => {
+    return adminRequest('/admin/analytics/events/summary', {
+      method: 'GET',
+    });
+  },
+  getStudentEventTrends: async () => {
+    return adminRequest('/admin/analytics/student-event-trends', {
+      method: 'GET',
+    });
+  },
+  getFeedbackSummary: async () => {
+    return adminRequest('/admin/analytics/feedback-summary', {
+      method: 'GET',
+    });
+  },
+  getInactiveAlumni: async () => {
+    return adminRequest('/admin/analytics/inactive-alumni', {
+      method: 'GET',
+    });
+  },
+  getSystemHealth: async () => {
+    return adminRequest('/admin/analytics/system-health', {
+      method: 'GET',
+    });
+  },
+  getAdminActivity: async () => {
+    return adminRequest('/admin/analytics/admin-activity', {
+      method: 'GET',
+    });
+  },
+};
+
+/**
  * Python Backend API (Admin Dashboard & Alumni Engagement)
  * These endpoints connect to the Python Flask backend
  */
@@ -509,6 +619,7 @@ const api = {
   notification: notificationAPI,
   search: searchAPI,
   auth: authAPI,
+  admin: adminAPI,
   event: eventAPI, // Event API
   competition: competitionAPI, // Competition API
   python: pythonAPI, // Python backend API

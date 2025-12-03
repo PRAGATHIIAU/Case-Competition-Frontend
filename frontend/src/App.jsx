@@ -88,19 +88,19 @@ function App() {
           <Routes>
             <Route path="/" element={<LandingPage />} />
             {/* Protected Dashboard Routes - Role-Based Access Control */}
-            <Route path="/student/dashboard" element={<ProtectedRoute requiredRole="student"><StudentDashboard /></ProtectedRoute>} />
-            <Route path="/student" element={<ProtectedRoute requiredRole="student"><StudentDashboard /></ProtectedRoute>} />
-            <Route path="/mentor/dashboard" element={<ProtectedRoute requiredRole="mentor"><MentorDashboard /></ProtectedRoute>} />
-            <Route path="/mentor" element={<ProtectedRoute requiredRole="mentor"><MentorDashboard /></ProtectedRoute>} />
-            <Route path="/alumni/dashboard" element={<ProtectedRoute requiredRole="alumni"><AlumniDashboard /></ProtectedRoute>} />
-            <Route path="/faculty/dashboard" element={<ProtectedRoute requiredRole="faculty"><FacultyDashboard /></ProtectedRoute>} />
-            <Route path="/faculty" element={<ProtectedRoute requiredRole="faculty"><FacultyDashboard /></ProtectedRoute>} />
-            <Route path="/admin/dashboard" element={<ProtectedRoute requiredRole="admin"><AdminDashboard /></ProtectedRoute>} />
-            <Route path="/admin" element={<ProtectedRoute requiredRole="admin"><AdminDashboard /></ProtectedRoute>} />
-            {/* Other routes - Role-Based Protection */}
-            <Route path="/industry" element={<ProtectedRoute allowedRoles={['mentor', 'alumni', 'judge', 'guest_speaker']}><IndustryDashboard /></ProtectedRoute>} />
-            <Route path="/student-enhanced" element={<ProtectedRoute requiredRole="student"><EnhancedStudentDashboard /></ProtectedRoute>} />
-            <Route path="/judge" element={<ProtectedRoute requiredRole="judge"><JudgeDashboard /></ProtectedRoute>} />
+            <Route path="/student/dashboard" element={<ProtectedRoute><StudentDashboard /></ProtectedRoute>} />
+            <Route path="/student" element={<ProtectedRoute><StudentDashboard /></ProtectedRoute>} />
+            <Route path="/mentor/dashboard" element={<ProtectedRoute><MentorDashboard /></ProtectedRoute>} />
+            <Route path="/mentor" element={<ProtectedRoute><MentorDashboard /></ProtectedRoute>} />
+            <Route path="/alumni/dashboard" element={<ProtectedRoute><AlumniDashboard /></ProtectedRoute>} />
+            <Route path="/faculty/dashboard" element={<ProtectedRoute><FacultyDashboard /></ProtectedRoute>} />
+            <Route path="/faculty" element={<ProtectedRoute><FacultyDashboard /></ProtectedRoute>} />
+            <Route path="/admin/dashboard" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+            <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+            {/* Other routes - now only check authentication */}
+            <Route path="/industry" element={<ProtectedRoute><IndustryDashboard /></ProtectedRoute>} />
+            <Route path="/student-enhanced" element={<ProtectedRoute><EnhancedStudentDashboard /></ProtectedRoute>} />
+            <Route path="/judge" element={<ProtectedRoute><JudgeDashboard /></ProtectedRoute>} />
             <Route path="/stakeholder/feedback/:competitionId" element={<ProtectedRoute><StakeholderFeedback /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
             <Route path="/search" element={<ProtectedRoute><SearchResults /></ProtectedRoute>} />

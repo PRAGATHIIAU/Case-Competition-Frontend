@@ -5,13 +5,13 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 3000,
+    port: 5173,
     open: true,
     strictPort: false,
     proxy: {
       // Node.js backend (existing)
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'http://localhost:3000',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path // Only proxy /api routes, not root
@@ -19,12 +19,12 @@ export default defineConfig({
       // Python backend (for admin dashboard stats and alumni engagement)
       // Note: If Python backend runs on a different port, update target below
       '/api/stats': {
-        target: 'http://localhost:5000', // Change to Python backend port if different
+        target: 'http://localhost:3000', // Change to Python backend port if different
         changeOrigin: true,
         secure: false,
       },
       '/api/alumni': {
-        target: 'http://localhost:5000', // Change to Python backend port if different
+        target: 'http://localhost:3000', // Change to Python backend port if different
         changeOrigin: true,
         secure: false,
       }

@@ -261,6 +261,8 @@ export const mockIndustryInterest = [
 
 export const mockAdminStats = {
   activeStudents: 1247,
+  inactiveStudents: 0,
+  studentEngagementPercent: 72,
   alumniEngagement: 68,
   partnerNPS: 84,
   activeEvents: 12

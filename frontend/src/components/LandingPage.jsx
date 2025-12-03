@@ -57,23 +57,15 @@ export default function LandingPage() {
     }
   }, [navigate])
 
-  const [requiredLoginRole, setRequiredLoginRole] = useState(null)
+  const [loginContext, setLoginContext] = useState('general')
 
-  const checkAuthAndNavigate = (path, roleName, requiredRoles = null) => {
-    // SECURITY FIX: Always require fresh login for portal-specific access
-    // Even if user is logged in, they must re-enter credentials for portal access
-    // This prevents unauthorized access when switching between portals
-    
-    // Set the required role for login validation
-    const roleToRequire = Array.isArray(requiredRoles) ? requiredRoles[0] : requiredRoles
-    setRequiredLoginRole(roleToRequire)
-    
+  const openLoginModal = (context = 'general', roleName = '') => {
+    setLoginContext(context)
     setToast({
-      message: `Please login to continue. ${roleName ? `This portal is for ${roleName} users only.` : ''}`,
+      message: `Please login to continue.${roleName ? ` This portal is for ${roleName} users.` : ''}`,
       type: 'error'
     })
     setShowLogin(true)
-    return false
   }
 
   return (
@@ -100,7 +92,7 @@ export default function LandingPage() {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => {
-                  setRequiredLoginRole(null) // General login, no role restriction
+                  setLoginContext('general')
                   setShowLogin(true)
                 }}
                 className="px-6 py-3 bg-tamu-maroon text-white rounded-lg font-semibold hover:bg-tamu-maroon-light shadow-md hover:shadow-lg transition-all"
@@ -128,7 +120,6 @@ export default function LandingPage() {
                 exit={{ opacity: 0 }}
                 onClick={() => {
                   setShowLogin(false)
-                  setRequiredLoginRole(null) // Reset when closing modal
                 }}
                 className="fixed inset-0 bg-black/50 z-40"
               />
@@ -142,22 +133,19 @@ export default function LandingPage() {
                   <button
                     onClick={() => {
                       setShowLogin(false)
-                      setRequiredLoginRole(null) // Reset when closing modal
                     }}
                     className="absolute -top-12 right-0 text-white hover:text-gray-200 transition-colors"
                   >
                     <X className="w-6 h-6" />
                   </button>
                   <LoginForm 
-                    key={`login-${requiredLoginRole || 'general'}-${showLogin}`} // Force re-render when role changes or modal opens
-                    requiredRole={requiredLoginRole}
+                    key={`login-${loginContext}-${showLogin}`} // Force re-render when context changes or modal opens
+                    loginContext={loginContext}
                     onClose={() => {
                       setShowLogin(false)
-                      setRequiredLoginRole(null) // Reset when closing
                     }}
                     onLoginSuccess={() => {
                       setShowLogin(false)
-                      setRequiredLoginRole(null) // Reset after login
                     }} 
                   />
                 </div>
@@ -198,7 +186,7 @@ export default function LandingPage() {
                       setShowSignup(false)
                       if (!user) {
                         // User clicked "Login instead"
-                        setRequiredLoginRole(null) // General login, no role restriction
+                        setLoginContext('general')
                         setShowLogin(true)
                       }
                     }} 
@@ -218,7 +206,7 @@ export default function LandingPage() {
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
-              checkAuthAndNavigate('/student', 'Student', 'student')
+              openLoginModal('student', 'Student')
             }}
             className="bg-white rounded-lg shadow-lg p-8 hover:shadow-xl transition-shadow cursor-pointer h-full"
           >
@@ -236,7 +224,7 @@ export default function LandingPage() {
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
-              checkAuthAndNavigate('/alumni/dashboard', 'Alumni/Industry Partner', ['mentor', 'alumni', 'judge', 'guest_speaker'])
+              openLoginModal('alumni', 'Alumni/Industry partners')
             }}
             className="bg-white rounded-lg shadow-lg p-8 hover:shadow-xl transition-shadow cursor-pointer h-full"
           >
@@ -254,7 +242,7 @@ export default function LandingPage() {
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
-              checkAuthAndNavigate('/faculty', 'Faculty/Admin', ['faculty', 'admin'])
+              openLoginModal('admin', 'Faculty/Admin')
             }}
             className="bg-white rounded-lg shadow-lg p-8 hover:shadow-xl transition-shadow cursor-pointer h-full"
           >
